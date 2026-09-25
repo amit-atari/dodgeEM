@@ -1200,7 +1200,8 @@
     // city skyline above the road: two parallax layers of glyph buildings scrolling past
     var sFar = Math.floor(s * 0.35), sNear = Math.floor(s * 0.8);
     // the moon, high over the city
-    var mr = Math.max(10, Math.min(W, H) * 0.045), mx = W * 0.8, my = Math.max(this.hudTop + mr + 6, hr * chh * 0.28);
+    // low enough that the taller buildings pass in front of it as the city scrolls by
+    var mr = Math.max(10, Math.min(W, H) * 0.045), mx = W * 0.8, my = Math.max(this.hudTop + mr + 6, this.hudTop + (hr * chh - this.hudTop) * 0.5);
     ctx.save();
     ctx.shadowColor = 'rgba(230,110,80,.75)'; // a slightly red moon
     ctx.shadowBlur = mr * 1.2 * this.dpr;
@@ -1230,12 +1231,18 @@
         if (zone === 0) {
           var up = hr - r; // rows above the horizon (1 = just above it)
           var bn = building(c + sNear, 9, nearMax, 7, up, t);
+          var bf0 = bn ? null : building(c + sFar, 6, farMax, 3, up, t);
+          // a building cell in front of the moon: paint the cell dark first so the moon is hidden behind it
+          if ((bn || bf0) && Math.abs(x - mx) < mr + cw && Math.abs(py - my) < mr + chh) {
+            ctx.fillStyle = DE.COLORS.ground;
+            ctx.fillRect(x - cw / 2 - 0.5, py - chh / 2 - 0.5, cw + 1, chh + 1);
+          }
           if (bn) {
             if (bn.beacon) this.put(bn.on ? ck(0, 100, 60) : ck(0, 30, 30), bn.ch, x, py); // red tower light (red even on the grey road)
             else this.put(rc(bn.win ? 45 : 220, bn.win ? 80 : 8, bn.win ? 62 : bn.l + 30), bn.ch, x, py);
             continue;
           }
-          var bf = building(c + sFar, 6, farMax, 3, up, t);
+          var bf = bf0;
           if (bf) {
             if (bf.beacon) this.put(bf.on ? ck(0, 90, 50) : ck(0, 25, 24), bf.ch, x, py);
             else this.put(rc(bf.win ? 45 : 220, bf.win ? 60 : 6, bf.win ? 44 : bf.l + 14), bf.ch, x, py);
