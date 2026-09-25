@@ -814,7 +814,7 @@
       ctx.font = this.fExit;
       ctx.fillStyle = '#B4531C';
       var ly = ey + (A.exitPoint.y > 0 ? -L * 1.5 : L * 1.5);
-      ctx.fillText('BEYOND', ex, ly);
+      ctx.fillText('INFINITY', ex, ly);
       ctx.restore();
     }
 
@@ -1071,7 +1071,27 @@
   };
 
   /* ---------- road ---------- */
+  // One skyline cell. col = scrolled column, w = building width (incl. a 1-column street),
+  // maxH = tallest building in rows, seed picks the layer, up = rows above the horizon.
+  // Returns null for sky, else { ch, l (lightness offset), win (lit window) }.
+  function building(col, w, maxH, seed, up) {
+    var id = Math.floor(col / w), off = col - id * w;
+    if (off >= w - 1) return null;                       // the street between buildings
+    var h = 2 + Math.floor(DE.hash(id, seed) * (maxH - 1));
+    if (up > h) return null;
+    if (up === h) return { ch: off === 0 || off === w - 2 ? '▄' : '▀', l: 6, win: false };  // roof line
+    if (off === 0 || off === w - 2) return { ch: '█', l: 2, win: false };                   // side walls
+    if (up % 2 === 0 && off % 2 === 1) {                                                     // windows
+      var lit = DE.hash(id * 31 + off, up + seed) < 0.28;
+      return { ch: lit ? '▪' : '·', l: 0, win: lit };
+    }
+    return { ch: '▓', l: -4, win: false };
+  }
+
   Renderer.prototype.drawRoad = function (state) {
+    // level 2 is drawn in plain greys (no neon); dots and cars keep their colours
+    var greyRoad = !!(state.cfg && state.cfg.greyRoad);
+    var rc = function (h, sat, l) { return ck(h, greyRoad ? 0 : sat, l); };
     var ctx = this.ctx, R = state.road, t = state.t || 0, pt = state.pt || 0;
     var cur = state.cfg, next = state.nextCfg || state.cfg;
     var cols = this.cols, rows = this.rows, cw = this.cw, chh = this.chh, W = this.W, H = this.H;
@@ -1095,6 +1115,9 @@
     var sGround = s * 2, sDash = Math.floor(s * 6), sRoad = s * 1.2;
     var gH = H - bottomLane + 1;
     var CLOUD = RAMP.slice(1, 8); // ' .·:-=+' minus the space
+    // city skyline above the road: two parallax layers of glyph buildings scrolling past
+    var sFar = Math.floor(s * 0.35), sNear = Math.floor(s * 0.8);
+    var farMax = Math.max(2, Math.floor(hr * 0.85)), nearMax = Math.max(2, Math.floor(hr * 0.6));
 
     for (var r = 0; r < rows; r++) {
       var py = (r + 0.5) * chh;
@@ -1108,28 +1131,33 @@
       for (var c = 0; c < cols; c++) {
         var hue = colHue[c], x = (c + 0.5) * cw, n;
         if (zone === 0) {
+          var up = hr - r; // rows above the horizon (1 = just above it)
+          var bn = building(c + sNear, 9, nearMax, 7, up);
+          if (bn) { this.put(rc(bn.win ? 45 : 220, bn.win ? 80 : 8, bn.win ? 62 : bn.l + 30), bn.ch, x, py); continue; }
+          var bf = building(c + sFar, 6, farMax, 3, up);
+          if (bf) { this.put(rc(bf.win ? 45 : 220, bf.win ? 60 : 6, bf.win ? 44 : bf.l + 14), bf.ch, x, py); continue; }
           n = vnoise(c * 0.09 + sCloud, r * 0.35);
           if (n > 0.66 && vnoise(c * 0.3 + sCloud, r * 0.9 + 5) > 0.35) {
             var q = (n - 0.66) / 0.34;
-            this.put(ck(hue + 30, 60, 38 + q * 35), CLOUD[Math.min(6, (q * 7) | 0)], x, py);
+            this.put(rc(hue + 30, 60, 38 + q * 35), CLOUD[Math.min(6, (q * 7) | 0)], x, py);
           } else if (hash(c + sStar, r) < 0.004) {
-            this.put(ck(hue, 40, 45), '·', x, py);
+            this.put(rc(hue, 40, 45), '·', x, py);
           }
         } else if (zone === 1) {
-          this.put(ck(hue, 90, 62), '=', x, py);
+          this.put(rc(hue, 90, 62), '=', x, py);
         } else if (zone === 2) {
           var grass = vnoise(c * 0.45 + sGrass, 1.7) * 0.5 + 0.2;
           if (dG > 1 - grass) {
-            this.put(ck(hue - 10, 85, 12 + (1 - dG) * 50), hash(c + sGrassHash, r) < 0.5 ? '█' : '▓', x, py);
+            this.put(rc(hue - 10, 85, 12 + (1 - dG) * 50), hash(c + sGrassHash, r) < 0.5 ? '█' : '▓', x, py);
           } else {
             n = vnoise(c * 0.2 + sGround, r * 1.1);
-            if (n > 0.5) this.put(ck(hue, 80, 22 + n * 20), RAMP[3 + Math.min(9, ((n - 0.5) * 14) | 0)], x, py);
+            if (n > 0.5) this.put(rc(hue, 80, 22 + n * 20), RAMP[3 + Math.min(9, ((n - 0.5) * 14) | 0)], x, py);
           }
         } else if (zone === 3) {
-          if ((c + sDash) % 6 < 3) this.put(ck(hue, 70, 45), '-', x, py);
+          if ((c + sDash) % 6 < 3) this.put(rc(hue, 70, 45), '-', x, py);
         } else {
           n = vnoise(c * 0.1 + sRoad, r * 0.9);
-          if (n > 0.72) this.put(ck(hue, 60, 14 + n * 10), RAMP[2 + Math.min(10, ((n - 0.72) * 12) | 0)], x, py);
+          if (n > 0.72) this.put(rc(hue, 60, 14 + n * 10), RAMP[2 + Math.min(10, ((n - 0.72) * 12) | 0)], x, py);
         }
       }
     }

@@ -78,13 +78,14 @@
     } catch (e) { return ''; }
   }
 
+  var BEYOND_TRACK_LEVEL = 4; // arena track index used for INFINITY (Neon Hyperdrive)
+
   /* ===================== ENGINE ===================== */
   function AudioEngine() {
+    // Music always starts ON when the game opens. (It used to remember "off" forever, so one
+    // accidental M press made the game silent on every visit.) M / the button still toggle it.
     this.musicOn = true;
-    try {
-      var v = window.localStorage.getItem(LS_KEY);
-      if (v === '0') this.musicOn = false;
-    } catch (e) { /* storage blocked */ }
+    try { window.localStorage.removeItem(LS_KEY); } catch (e) { /* storage blocked */ }
 
     this.nowPlaying = SYNTH_ARENA[0];
     this.unlocked = false;
@@ -156,7 +157,7 @@
     on('levelStart', function (p) {
       self.level = p.level || self.level;
       var g = self.game && self.game.state;
-      if (self.mode === 'play') self._select(g && g.cfg && g.cfg.layout === 'beyond' ? 'title' : 'arena', self.level);
+      if (self.mode === 'play') self._select('arena', g && g.cfg && g.cfg.layout === 'beyond' ? BEYOND_TRACK_LEVEL : self.level);
     });
     on('roadStart', function (p) {
       self.level = p.level || self.level;
@@ -215,7 +216,6 @@
 
   AudioEngine.prototype.toggleMusic = function () {
     this.musicOn = !this.musicOn;
-    try { window.localStorage.setItem(LS_KEY, this.musicOn ? '1' : '0'); } catch (e) { /* ignore */ }
     this.unlock();
     if (this.fileActive) {
       if (this.musicOn) {
@@ -263,7 +263,8 @@
       var road = st && st.phase === 'road';
       this.hadPlay = true;
       var beyond = st && st.cfg && st.cfg.layout === 'beyond' && !road;
-      this._select(road ? 'road' : beyond ? 'title' : 'arena', lvl);
+      // level 3 (INFINITY) gets the most energetic arena track, "Neon Hyperdrive" (4th arena track)
+      this._select(road ? 'road' : 'arena', beyond ? BEYOND_TRACK_LEVEL : lvl);
     } else if (this.mode === 'over') {
       this._setDuck(true);
     } else if (this.hadPlay) {
@@ -308,12 +309,24 @@
 
   AudioEngine.prototype._fade = function (target, secs, done) {
     var el = this.el;
-    if (this._fadeTimer) { clearInterval(this._fadeTimer); this._fadeTimer = 0; }
+    if (this._fadeTimer) {
+      clearInterval(this._fadeTimer);
+      this._fadeTimer = 0;
+      // A newer fade must never swallow an older fade's callback (e.g. the track swap that runs
+      // after a fade-out): finish it now, then let this fade take over from the current volume.
+      var pending = this._fadeDone;
+      this._fadeDone = null;
+      if (pending) {
+        pending();
+        if (this._fadeTimer) { clearInterval(this._fadeTimer); this._fadeTimer = 0; this._fadeDone = null; }
+      }
+    }
     if (!el) { if (done) done(); return; }
     var from = el.volume;
     var steps = Math.max(1, Math.round((secs * 1000) / 30));
     var i = 0;
     var self = this;
+    this._fadeDone = done || null;
     this._fadeTimer = setInterval(function () {
       i++;
       var v = from + (target - from) * (i / steps);
@@ -321,7 +334,9 @@
       if (i >= steps) {
         clearInterval(self._fadeTimer);
         self._fadeTimer = 0;
-        if (done) done();
+        var d = self._fadeDone;
+        self._fadeDone = null;
+        if (d) d();
       }
     }, 30);
   };

@@ -39,11 +39,11 @@
 
   // Levels alternate: odd = arena (clear the dots, break the wall), even = road (dodge the traffic).
   // arenaNo counts arenas: level 1 -> arena 1, level 2 -> road after arena 1, level 3 -> arena 2, ...
-  DE.FINAL_LEVEL = 3; // 1 = The Square, 2 = Offramp (dodge), 3 = Beyond (final, free roam)
+  DE.FINAL_LEVEL = 3; // 1 = RETRO (the square), 2 = BEYOND (the road), 3 = INFINITY (final, free roam)
   DE.BEYOND = { stars: 20, bound: 8, speed: 3.8, enemySpeed: 2.1, portalR: 0.9, // world is 16x16 lanes; the camera follows
     speedUp: 0.012, speedMax: 1.8,      // player: +1.2% speed per second, up to 1.8x
     huntUp: 0.004, huntMax: 1.3,        // hunters speed up more slowly (always slower than you)
-    spawnEvery: 15, maxHunters: 6 };    // a new hunter every 15 s, up to 6
+    spawnFirst: 8, spawnEvery: 8, spawnShrink: 0.6, spawnMin: 4, maxHunters: 8 }; // the longer you take, the faster they come: 8 s, 7.4 s, 6.8 s ... down to 4 s, up to 8 hunters
 
   DE.levelConfig = function (level) {
     var road = level % 2 === 0;
@@ -55,10 +55,12 @@
       kind: road ? 'road' : 'arena',
       layout: beyond ? 'beyond' : clover ? 'clover' : 'square',
       greyWalls: !road && an === 1, // level 1: plain solid grey walls instead of neon
+      greyRoad: road && an === 1,   // level 2: the road in greys too
       arenaNo: an,
       hue: p.hue,
       range: p.range,
-      name: road ? 'OFFRAMP ' + an : beyond ? 'BEYOND' : clover ? 'CLOVERLEAF' : p.name,
+      // level names: 1 RETRO, 2 BEYOND (the road), 3 INFINITY (free roam)
+      name: road ? (an === 1 ? 'BEYOND' : 'OFFRAMP ' + an) : beyond ? 'INFINITY' : clover ? 'CLOVERLEAF' : an === 1 ? 'RETRO' : p.name,
       // arena
       enemies: an >= 2 ? 2 : 1,
       enemySpeed: an === 1 ? 0.45 : clover ? 0.5 : Math.min(0.95, 0.55 + 0.06 * (an - 1)),
@@ -204,6 +206,18 @@
       return 1;
     }
   }
+  var CURRENT_KEY = 'dodgeem-beyond-current'; // the level being played (checkpoint = furthest unlocked)
+  function loadCurrent() {
+    try {
+      var v = parseInt(window.localStorage.getItem(CURRENT_KEY) || '1', 10) || 1;
+      return Math.max(1, Math.min(DE.FINAL_LEVEL, v));
+    } catch (e) {
+      return 1;
+    }
+  }
+  function saveCurrent(v) {
+    try { window.localStorage.setItem(CURRENT_KEY, String(v)); } catch (e) { /* storage blocked */ }
+  }
   function saveLevel(v) {
     try {
       window.localStorage.setItem(LEVEL_KEY, String(v));
@@ -246,7 +260,7 @@
       road: null
     };
     this.state.checkpoint = loadLevel();
-    this.state.level = this.state.checkpoint;
+    this.state.level = Math.min(loadCurrent(), this.state.checkpoint); // reopen on the level you were playing
     this._startLevel(true);
     this.state.pt = 0.5; // no fade-in on the very first frame (board first)
   }
@@ -321,6 +335,7 @@
   // Build the board for S.level. wait = show it frozen ('ready') until the player presses.
   Game.prototype._startLevel = function (wait) {
     var S = this.state;
+    saveCurrent(S.level);
     this.tapQ = null;
     this._clearQueue();
     var cfg = DE.levelConfig(S.level);
@@ -377,7 +392,8 @@
     var S = this.state;
     S.mode = 'play';
     S.paused = false;
-    S.level = S.won ? 1 : Math.min(S.checkpoint, DE.FINAL_LEVEL); // after winning, play again from level 1
+    // dying replays the SAME level; only winning moves on (after the final level: back to level 1)
+    S.level = S.won ? 1 : Math.min(S.level, DE.FINAL_LEVEL);
     S.won = false;
     this.winPending = 0;
     S.score = 0;
@@ -466,6 +482,7 @@
   Game.prototype.resetProgress = function () {
     this.state.checkpoint = 1;
     saveLevel(1);
+    saveCurrent(1);
     this.selectLevel(1);
   };
   DE.MENU_LEVELS = 3; // the whole game: two arenas and the road between them
@@ -966,8 +983,9 @@
     var rt = this.runT || 0;
     var sp = B.speed * Math.min(B.speedMax, 1 + B.speedUp * rt);
     // more hunters over time, each from the corner farthest from you
-    if (S.phase === 'arena' && A.enemies.length < B.maxHunters && rt >= (A.nextSpawn || B.spawnEvery)) {
-      A.nextSpawn = (A.nextSpawn || B.spawnEvery) + B.spawnEvery;
+    if (S.phase === 'arena' && A.enemies.length < B.maxHunters && rt >= (A.nextSpawn || B.spawnFirst)) {
+      A.spawned = (A.spawned || 0) + 1;
+      A.nextSpawn = (A.nextSpawn || B.spawnFirst) + Math.max(B.spawnMin, B.spawnEvery - B.spawnShrink * A.spawned);
       var sx = P.x > 0 ? -(bd - 0.8) : bd - 0.8, sy = P.y > 0 ? -(bd - 0.8) : bd - 0.8;
       A.enemies.push({ x: sx, y: sy, vx: 0, vy: 0, facing: 0, near: false });
       this._float('arena', P.x, P.y, 'NEW HUNTER!', DE.COLORS.enemy);
@@ -1450,7 +1468,7 @@
     ['W A S D', 'drive in ANY direction (two keys = diagonal)'],
     ['DRAG', 'hold and move your finger / mouse: the car follows it'],
     ['GOAL', 'the world is big: find all 20 stars, then drive into the light'],
-    ['WATCH', 'you speed up over time, and a new hunter joins every 15 s']
+    ['WATCH', 'the longer you take, the faster new hunters join (up to 8)']
   ];
   LEVEL_TIPS.clover = [
     ['NEW', 'four loops: gaps in the shared walls lead into the next loop'],
