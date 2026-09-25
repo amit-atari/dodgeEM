@@ -251,6 +251,7 @@ button { font: inherit; color: inherit; }
   pointer-events: none;
 }
 .toast.on { opacity: 1; }
+#toast { z-index: 6; line-height: 1.5; white-space: normal; } /* tips (e.g. the iPad Home Screen hint) sit above overlays */
 .toast:empty { display: none; }
 
 /* ---------- overlays: compact, the board stays visible ---------- */

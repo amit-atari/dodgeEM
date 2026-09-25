@@ -120,6 +120,24 @@
     }
   };
 
+  // iPhone / iPad (iPadOS reports itself as a Mac with touch)
+  DE.isIOS = function () {
+    try {
+      var ua = navigator.userAgent || '';
+      return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    } catch (e) {
+      return false;
+    }
+  };
+  // opened from the Home Screen as an app (no browser bars)
+  DE.isStandalone = function () {
+    try {
+      return window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true;
+    } catch (e) {
+      return false;
+    }
+  };
+
   DE.lanePos = function (laneF, u) {
     var h = DE.HALF - (laneF + 0.5);
     var p = (((u % 1) + 1) % 1) * 4;
@@ -1468,7 +1486,8 @@
     var st = this.el.stage;
     this.fsSupported = !!(st && (st.requestFullscreen || st.webkitRequestFullscreen) &&
       (document.fullscreenEnabled || document.webkitFullscreenEnabled));
-    if (this.el.bFull && !this.fsSupported) this.el.bFull.hidden = true;
+    // opened from the Home Screen as an app: already full screen, so no fullscreen button
+    if (this.el.bFull && (!this.fsSupported && !DE.isIOS() || DE.isStandalone())) this.el.bFull.hidden = true;
     var onFs = function () {
       if (self.el.bFull) self.el.bFull.setAttribute('aria-pressed', fsElement() ? 'true' : 'false');
     };
@@ -1640,7 +1659,22 @@
     }
   };
 
+  // A short message in the toast bar at the bottom of the stage.
+  UI.prototype.tip = function (msg, sec) {
+    var el = $('toast'), self = this;
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.add('on');
+    clearTimeout(this.tipTimer);
+    this.tipTimer = setTimeout(function () { el.classList.remove('on'); self.tipTimer = 0; }, (sec || 6) * 1000);
+  };
+
   UI.prototype.toggleFullscreen = function () {
+    // iPad / iPhone Safari always closes browser fullscreen on a swipe down (an Apple gesture pages
+    // cannot block). The fix there is the Home Screen app, which has no browser around it.
+    if (DE.isIOS() && !DE.isStandalone() && !fsElement()) {
+      this.tip('iPad / iPhone: tap Share ⬆ then "Add to Home Screen" and open the game from its icon for true full screen (swipes will not close it).', 9);
+    }
     if (!this.fsSupported) return;
     var st = this.el.stage;
     try {
