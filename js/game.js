@@ -1610,7 +1610,7 @@
     var S = this.game.state, el = this.el, a = this.audio;
     setText(el.hLv, 'LEVEL ' + S.level + ' · ' + S.cfg.name);
     // Beyond is a pale field: switch the HUD to dark text there
-    if (el.stage) el.stage.classList.toggle('pale', S.phase !== 'road' && S.cfg.layout === 'beyond');
+    if (el.stage) el.stage.classList.remove('pale'); // every level is dark now, so the HUD keeps its light text
     setText(el.hScore, DE.pad6(S.score));
     setText(el.hHi, DE.pad6(Math.max(S.hi, S.score)));
     var dots;

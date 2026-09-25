@@ -821,7 +821,7 @@
     else { cam.x += (tx - cam.x) * 0.12; cam.y += (ty - cam.y) * 0.12; }
     var cx = this.cx - cam.x * L, cy = this.cy - cam.y * L; // screen position of the world origin
     var drift = this.reduce ? 0.03 : 0.12;
-    ctx.fillStyle = '#EBE8DF';
+    ctx.fillStyle = DE.COLORS.ground; // dark, like levels 1 and 2
     ctx.fillRect(0, 0, W, H);
     var thr = Math.max(cw, chh) * 0.55 / L;
     for (var r = 0; r < rows; r++) {
@@ -834,11 +834,11 @@
           var glit = GLITTER[gi], hueG = GLITTER_HUES[(c + r + ((t * 2) | 0)) % GLITTER_HUES.length];
           if (tw < 0.18) this.put(ck(hueG, 95, 58), '✦', pxx, py);          // bright twinkle
           else if (tw < 0.55) this.put(ck(hueG, 80, 66), glit, pxx, py);     // shimmer
-          else this.put(ck(40, 30, 70), '·', pxx, py);
+          else this.put(ck(230, 8, 42), '·', pxx, py);
         } else if (d > edge) {                                // beyond the edge: denser dither
-          if (n > 0.42) this.put(ck(35, 8, 70 - (n - 0.42) * 50), RAMP[2 + Math.min(8, ((n - 0.42) * 16) | 0)], pxx, py);
+          if (n > 0.42) this.put(ck(230, 6, 14 + (n - 0.42) * 30), RAMP[2 + Math.min(8, ((n - 0.42) * 16) | 0)], pxx, py); // grey dither past the edge
         } else if (n > 0.7) {                                 // drifting glyph clouds on the field
-          this.put(ck(35, 10, 74 - (n - 0.7) * 50), '.:·-'[Math.min(3, ((n - 0.7) * 12) | 0)], pxx, py);
+          this.put(ck(230, 6, 18 + (n - 0.7) * 40), '.:·-'[Math.min(3, ((n - 0.7) * 12) | 0)], pxx, py); // faint grey drift on the field
         }
       }
     }
@@ -880,7 +880,7 @@
       ctx.fill();
       ctx.shadowBlur = 0;
       ctx.font = this.fExit;
-      ctx.fillStyle = '#B4531C';
+      ctx.fillStyle = DE.COLORS.player;
       var ly = ey + (A.exitPoint.y > 0 ? -L * 1.5 : L * 1.5);
       ctx.fillText('INFINITY', ex, ly);
       ctx.restore();
