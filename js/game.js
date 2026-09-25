@@ -2021,21 +2021,35 @@
     DE.app = { game: game, renderer: renderer, audio: audio, ui: ui, input: input };
 
     // ---- sizing ----
-    var lastW = -1, lastH = -1;
+    var lastW = -1, lastH = -1, lastHud = -1;
+    // how far down the HUD reaches inside the stage (it wraps to 2 rows on narrow screens):
+    // the playfield starts below it so nothing is hidden under the score / buttons
+    var hudBottom = function (r) {
+      var b = 0, parts = document.querySelectorAll('.hud .tl, .hud .tr');
+      for (var i = 0; i < parts.length; i++) {
+        var pr = parts[i].getBoundingClientRect();
+        if (pr.height > 0) b = Math.max(b, pr.bottom - r.top);
+      }
+      return Math.round(b);
+    };
     var doResize = function () {
       var el = stage || cv;
       if (!el) return;
       var r = el.getBoundingClientRect();
-      var w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height));
-      if (w === lastW && h === lastH) return;
+      var w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height)), hb = hudBottom(r);
+      if (w === lastW && h === lastH && hb === lastHud) return;
       lastW = w;
       lastH = h;
-      try { renderer.resize(w, h); } catch (e) { console.error('[DodgeEm] renderer.resize failed:', e); }
+      lastHud = hb;
+      try { renderer.resize(w, h, hb); } catch (e) { console.error('[DodgeEm] renderer.resize failed:', e); }
       // level 1 and INFINITY take the screen's shape
       try { if (renderer.playAspect) game.setAspect(renderer.playAspect()); } catch (e) { /* ignore */ }
     };
     if (typeof window.ResizeObserver === 'function' && stage) {
-      new window.ResizeObserver(doResize).observe(stage);
+      var ro = new window.ResizeObserver(doResize);
+      ro.observe(stage);
+      var hudParts = document.querySelectorAll('.hud .tl, .hud .tr'); // the HUD grows / wraps when its text changes
+      for (var hp = 0; hp < hudParts.length; hp++) ro.observe(hudParts[hp]);
     } else {
       window.addEventListener('resize', doResize);
       window.addEventListener('orientationchange', function () {

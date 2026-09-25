@@ -93,7 +93,7 @@
   }
 
   /* ---------- layout ---------- */
-  Renderer.prototype.resize = function (cssW, cssH) {
+  Renderer.prototype.resize = function (cssW, cssH, hudBottom) {
     var W = (this.W = Math.max(1, cssW || 1));
     var H = (this.H = Math.max(1, cssH || 1));
     var small = Math.min(W, H) < 700 || W * H < 600000;
@@ -115,13 +115,14 @@
     this.fontPx = cw * 1.44;
 
     // play area under the HUD (the HUD is thinner on short landscape phones)
-    this.hudTop = H < 500 ? 34 : 56;
+    // measured HUD height from the page when available (it can wrap to 2 rows), else a sensible default
+    this.hudTop = hudBottom > 0 ? Math.min(H * 0.4, hudBottom + 6) : (H < 500 ? 34 : 56);
     this.layoutKey = null;
     this.useLayout(DE.HALF, DE.HALF);
 
     // road
     this.laneGap = Math.max(chh * 3.4, Math.min(H * 0.065, W * 0.14));
-    this.roadY0 = H * 0.56;
+    this.roadY0 = Math.max(H * 0.56, this.hudTop + (H - this.hudTop) * 0.42); // the road always sits well below the HUD
 
     // fonts
     this.fGlyph = this.fontPx + 'px ' + FONT_STACK;
