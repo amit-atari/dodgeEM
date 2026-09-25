@@ -1,0 +1,10 @@
+// Paste into DE.TRACKS. All tracks are CC0 1.0 (see assets/music/CREDITS.md).
+// Arena tracks are ordered from lowest to highest intensity.
+[
+  { title: 'Level 1', artist: 'Juhani Junkala', file: 'assets/music/arena-01-junkala-level-1.mp3', license: 'CC0 1.0', source: 'https://opengameart.org/content/5-chiptunes-action', role: 'arena' },
+  { title: 'Electro', artist: 'Pro Sensory', file: 'assets/music/arena-02-prosensory-electro.mp3', license: 'CC0 1.0', source: 'https://opengameart.org/content/electro', role: 'arena' },
+  { title: 'Level 3', artist: 'Juhani Junkala', file: 'assets/music/arena-03-junkala-level-3.mp3', license: 'CC0 1.0', source: 'https://opengameart.org/content/5-chiptunes-action', role: 'arena' },
+  { title: 'Neon Hyperdrive', artist: 'Adiutorium', file: 'assets/music/arena-04-adiutorium-neon-hyperdrive.mp3', license: 'CC0 1.0', source: 'https://opengameart.org/content/neon-hyperdrive', role: 'arena' },
+  { title: 'Slipstream', artist: 'cinameng', file: 'assets/music/road-cinameng-slipstream.mp3', license: 'CC0 1.0', source: 'https://opengameart.org/content/slipstream', role: 'road' },
+  { title: 'Synthwave 421k', artist: 'The Cynic Project', file: 'assets/music/title-cynic-project-synthwave-421k.mp3', license: 'CC0 1.0', source: 'https://opengameart.org/content/calm-relax-1-synthwave-421k', role: 'title' }
+]

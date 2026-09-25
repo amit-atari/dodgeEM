@@ -1,0 +1,741 @@
+<title>Dodge 'Em Beyond</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;700&family=Rubik+Mono+One&display=swap">
+<style>
+  :root{
+    color-scheme: dark;
+    --ground:#0B0A12;
+    --panel:#15131F;
+    --line:#2A2640;
+    --ink:#EEEAF6;
+    --dim:#9A94B3;
+    --orange:#FF8A3D;
+    --magenta:#FF3DA8;
+    --cyan:#3DE0FF;
+    --yellow:#FFD23F;
+    --lime:#A6FF3D;
+    --violet:#8B5CFF;
+    --display:"Rubik Mono One", "Arial Black", Impact, sans-serif;
+    --body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono:"JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  html,body{background:var(--ground);color:var(--ink)}
+  body{font-family:var(--body);font-size:16px;line-height:1.6;padding-inline:16px;padding-block:20px 64px}
+  .wrap{max-width:1180px;margin-inline:auto;display:flex;flex-direction:column;gap:72px}
+  a{color:var(--cyan)}
+  :focus-visible{outline:2px solid var(--yellow);outline-offset:3px}
+
+  .topline{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 24px;font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin-bottom:-48px}
+  .topline b{color:var(--orange);font-weight:700}
+
+  /* hero stage */
+  .hero{display:flex;flex-direction:column;gap:14px}
+  .stage{position:relative;width:100%;max-width:100%;aspect-ratio:16/9;background:#07060C;border:1px solid var(--line);overflow:hidden;cursor:pointer}
+  @media (max-width:640px){.stage{aspect-ratio:4/5}}
+  .stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .hud{position:absolute;inset:0;pointer-events:none;font-family:var(--mono);font-size:12px;letter-spacing:.04em}
+  .hud .tl{position:absolute;left:14px;top:12px;display:flex;flex-direction:column;gap:2px}
+  .hud .tl .lv{font-weight:700;color:var(--ink)}
+  .hud .tl .st{color:var(--dim);font-variant-numeric:tabular-nums}
+  .np{position:absolute;right:14px;top:12px;background:#000;color:#F2EFE6;padding:6px 12px;display:flex;gap:10px;align-items:center;max-width:62%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .np .note{color:var(--magenta)}
+  .hud .cap{position:absolute;left:14px;bottom:12px;color:var(--yellow);text-transform:uppercase;letter-spacing:.12em;font-size:11px}
+  .banner{position:absolute;left:50%;top:22%;transform:translateX(-50%);text-align:center;font-family:var(--display);font-size:clamp(16px,3vw,30px);color:#fff;text-shadow:0 0 18px rgba(255,61,168,.7);opacity:0;transition:opacity .5s;white-space:nowrap}
+  .banner small{display:block;font-family:var(--mono);font-size:12px;letter-spacing:.2em;color:var(--dim);text-shadow:none;margin-bottom:6px}
+  .banner.on{opacity:1}
+  .queue{position:absolute;right:14px;bottom:12px;color:var(--cyan);font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+  .overlay{position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;padding:16px;padding-bottom:9%;background:linear-gradient(180deg,transparent 45%,rgba(7,6,12,.75))}
+  .ov-card{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;background:rgba(7,6,12,.82);border:1px solid var(--line);padding:18px 22px;max-width:100%}
+  .ov-card small{font-family:var(--mono);font-size:11px;letter-spacing:.16em;color:var(--dim)}
+  .ov-card strong{font-family:var(--display);font-weight:400;font-size:clamp(20px,3.4vw,32px);color:#fff}
+  .ov-card button{font-family:var(--display);font-size:16px;background:var(--orange);color:#1A0B02;border:0;padding:10px 26px;cursor:pointer}
+  .ov-card button:hover{background:#FFA566}
+  .ov-help{font-family:var(--mono);font-size:11.5px;color:var(--dim);line-height:1.6}
+  .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .controls button{font-family:var(--mono);font-size:13px;background:var(--panel);color:var(--ink);border:1px solid var(--line);padding:8px 14px;cursor:pointer}
+  .controls button:hover{border-color:var(--orange);color:var(--orange)}
+  .controls button.brk{border-color:var(--magenta);color:var(--magenta)}
+  .controls .hint{font-family:var(--mono);font-size:12px;color:var(--dim);margin-left:auto}
+  @media (max-width:640px){.controls .hint{margin-left:0}}
+
+  /* intro */
+  .intro{display:grid;grid-template-columns:1.1fr 1fr;gap:32px 56px;align-items:end}
+  @media (max-width:820px){.intro{grid-template-columns:1fr}}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  h1{font-family:var(--display);font-weight:400;font-size:clamp(38px,7vw,84px);line-height:.95;margin:.25em 0 0;text-wrap:balance;letter-spacing:-.01em}
+  h1 .beyond{background:linear-gradient(90deg,var(--cyan),var(--violet) 35%,var(--magenta) 65%,var(--orange));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .lede{font-size:clamp(18px,2vw,21px);line-height:1.5;max-width:34ch;margin:0}
+  .lede em{font-style:normal;color:var(--orange)}
+
+  h2{font-family:var(--display);font-weight:400;font-size:clamp(22px,3vw,32px);line-height:1.1;margin:0;text-wrap:balance}
+  .sec{display:flex;flex-direction:column;gap:28px}
+  .sec-head{display:flex;flex-direction:column;gap:8px;max-width:66ch}
+  .sec-head p{margin:0;color:var(--dim)}
+
+  /* ingredients */
+  .ingr{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line)}
+  @media (max-width:960px){.ingr{grid-template-columns:repeat(2,1fr)}}
+  @media (max-width:520px){.ingr{grid-template-columns:1fr}}
+  .ing{background:var(--ground);padding:22px 20px 24px;display:flex;flex-direction:column;gap:10px}
+  .ing .src{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+  .ing h3{margin:0;font-size:19px;font-weight:600}
+  .ing p{margin:0;color:var(--dim);font-size:15px}
+  .ing .take{font-family:var(--mono);font-size:12px;color:var(--ink);border-top:1px dashed var(--line);padding-top:10px;margin-top:auto}
+
+  /* loop */
+  .loop{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;counter-reset:step;list-style:none;margin:0;padding:0}
+  @media (max-width:900px){.loop{grid-template-columns:1fr 1fr}}
+  @media (max-width:480px){.loop{grid-template-columns:1fr}}
+  .loop li{position:relative;padding:16px 16px 18px;border-top:3px solid var(--c);background:var(--panel);display:flex;flex-direction:column;gap:6px}
+  .loop li::before{counter-increment:step;content:"0" counter(step);font-family:var(--mono);font-size:12px;color:var(--c);font-weight:700}
+  .loop h3{margin:0;font-size:17px;font-weight:600}
+  .loop p{margin:0;font-size:14.5px;color:var(--dim)}
+
+  /* rules */
+  .rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:28px 40px}
+  .rule{display:flex;flex-direction:column;gap:6px}
+  .rule .g{font-family:var(--mono);font-size:22px;line-height:1;color:var(--c)}
+  .rule h3{margin:0;font-size:18px;font-weight:600}
+  .rule p{margin:0;color:var(--dim);font-size:15px;max-width:44ch}
+
+  /* worlds */
+  .worlds{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  @media (max-width:960px){.worlds{grid-template-columns:repeat(2,1fr)}}
+  @media (max-width:600px){.worlds{grid-template-columns:1fr}}
+  .world{border:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column}
+  .world pre{margin:0;padding:18px 16px;font-family:var(--mono);font-size:12.5px;line-height:1.15;color:var(--c);background:#07060C;border-bottom:1px solid var(--line);overflow-x:auto;text-shadow:0 0 10px color-mix(in srgb,var(--c) 45%,transparent)}
+  .world pre .me{color:var(--orange);text-shadow:0 0 8px rgba(255,138,61,.8)}
+  .world pre .dot{color:var(--yellow)}
+  .world .body{padding:16px 18px 20px;display:flex;flex-direction:column;gap:8px;flex:1}
+  .world .num{font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--c);text-transform:uppercase}
+  .world h3{margin:0;font-size:20px;font-weight:600}
+  .world p{margin:0;font-size:14.5px;color:var(--dim)}
+  .world dl{margin:6px 0 0;display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13.5px}
+  .world dt{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);padding-top:2px}
+  .world dd{margin:0}
+
+  /* look & sound */
+  .look{display:grid;grid-template-columns:1.2fr 1fr;gap:40px}
+  @media (max-width:860px){.look{grid-template-columns:1fr}}
+  .swatches{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  @media (max-width:480px){.swatches{grid-template-columns:repeat(2,1fr)}}
+  .sw{display:flex;flex-direction:column;gap:6px;font-family:var(--mono);font-size:11.5px}
+  .sw i{display:block;height:56px;background:var(--c)}
+  .sw span{color:var(--dim)}
+  .ramp{margin-top:22px;font-family:var(--mono);display:flex;flex-direction:column;gap:6px}
+  .ramp .chars{font-size:clamp(20px,3.4vw,32px);letter-spacing:.2em;background:linear-gradient(90deg,var(--violet),var(--cyan),var(--lime),var(--yellow),var(--orange),var(--magenta));-webkit-background-clip:text;background-clip:text;color:transparent;overflow-x:auto;white-space:nowrap}
+  .ramp small{color:var(--dim);font-size:12px}
+  .track{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+  .track li{display:grid;grid-template-columns:2.5em 1fr auto;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);font-size:15px;align-items:baseline}
+  .track .n{font-family:var(--mono);font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
+  .track .w{font-family:var(--mono);font-size:11px;color:var(--c);text-transform:uppercase;letter-spacing:.08em}
+  .chipdemo{display:inline-flex;gap:10px;background:#000;color:#F2EFE6;font-family:var(--mono);font-size:12.5px;padding:7px 14px;margin-bottom:16px}
+  .chipdemo .note{color:var(--magenta)}
+
+  /* questions */
+  .qs{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
+  .q{background:var(--ground);padding:20px;display:flex;flex-direction:column;gap:8px}
+  .q h3{margin:0;font-size:17px;font-weight:600}
+  .q p{margin:0;font-size:14.5px;color:var(--dim)}
+  .q .lean{font-family:var(--mono);font-size:12px;color:var(--lime)}
+
+  footer{border-top:1px solid var(--line);padding-top:20px;font-size:13.5px;color:var(--dim);display:flex;flex-wrap:wrap;gap:8px 28px}
+  footer b{color:var(--ink);font-weight:500}
+
+  @media (prefers-reduced-motion:reduce){.banner{transition:none}}
+</style>
+
+<div class="wrap">
+  <div class="topline"><span><b>Research &amp; idea phase</b> · concept v0.1</span><span>Sept 2026 · working title</span></div>
+
+  <section class="hero" aria-label="Playable concept demo">
+    <div class="stage" id="stage" tabindex="0" aria-label="Concept demo. Arrow up and down change lanes at gaps, space boosts.">
+      <canvas id="cv"></canvas>
+      <div class="hud">
+        <div class="tl"><span class="lv" id="hudLv">WORLD 1-1 · NEON SQUARE</span><span class="st" id="hudSt">DOTS 64 · SCORE 0 · CRASHES 0</span></div>
+        <div class="np"><span class="note">♫</span><span id="hudNp">01 · Head On At Midnight</span></div>
+        <div class="cap" id="hudCap">Clear the lanes</div>
+        <div class="banner" id="banner"><small>NEXT ARENA</small><span id="bannerTxt">1-2 SUNSET SQUARE</span></div>
+        <div class="queue" id="hudQ"></div>
+      </div>
+      <div class="overlay" id="overlay">
+        <div class="ov-card">
+          <small id="ovSmall">DEMO IS DRIVING · ATTRACT MODE</small>
+          <strong id="ovTitle">Your turn?</strong>
+          <button type="button" id="bPlay">▶ Play</button>
+          <span class="ov-help">↑ / W: inner lane · ↓ / S: outer lane · Space: boost<br>Turns happen at the gaps in the middle of each side.</span>
+        </div>
+      </div>
+    </div>
+    <div class="controls">
+      <button type="button" id="bIn">↑ Inner lane</button>
+      <button type="button" id="bOut">↓ Outer lane</button>
+      <button type="button" id="bBoost">Hold to boost</button>
+      <button type="button" class="brk" id="bBreak">Skip to the break</button>
+      <button type="button" id="bPause">Pause</button>
+      <span class="hint">On a phone, tap the top half of the game for inner lane and the bottom half for outer.</span>
+    </div>
+  </section>
+
+  <section class="intro">
+    <div>
+      <div class="eyebrow">Atari 2600 · 1980 → now</div>
+      <h1>Dodge 'Em <span class="beyond">Beyond</span></h1>
+    </div>
+    <p class="lede">The 1980 lane-dodger, rebuilt as a journey. Clear the track, break through the outer wall, and drive out into the next level. Everything on screen is drawn with text characters, <em>except your car</em>.</p>
+  </section>
+
+  <section class="sec">
+    <div class="sec-head">
+      <div class="eyebrow">Research</div>
+      <h2>Four ingredients</h2>
+      <p>Each reference gives us one thing. Anything a reference doesn't give us stays out of the first prototype.</p>
+    </div>
+    <div class="ingr">
+      <div class="ing">
+        <span class="src" style="color:var(--cyan)">Atari 2600 · 1980</span>
+        <h3>Dodge 'Em</h3>
+        <p>Carla Meninsky's version of Sega's <i>Head On</i>. Four square lanes, gaps in the middle of each side, and a computer car coming the other way.</p>
+        <div class="take">We take: the lanes, the gaps, the head-on crash car, clearing the dots.</div>
+      </div>
+      <div class="ing">
+        <span class="src" style="color:var(--magenta)">Atari · 2024</span>
+        <h3>qomp2</h3>
+        <p>The Pong ball escapes its game and travels through strange new rooms. You control one thing, and the world keeps changing around it.</p>
+        <div class="take">We take: escape as the story. One-verb control. The car never stops.</div>
+      </div>
+      <div class="ing">
+        <span class="src" style="color:var(--orange)">Claude FM look</span>
+        <h3>Living glyph worlds</h3>
+        <p>Landscapes built from dithered ASCII that scrolls and drifts. One small, solid orange sprite. A black "now playing" chip in the corner.</p>
+        <div class="take">We take: the text-character renderer, the solid hero sprite, the radio framing.</div>
+      </div>
+      <div class="ing">
+        <span class="src" style="color:var(--lime)">Atari · 2025</span>
+        <h3>Breakout Beyond</h3>
+        <p>A classic reworked with saturated neon, a strong color identity per stage, and loud, clear feedback when something breaks.</p>
+        <div class="take">We take: the color. Each world owns a hue range. Breaking things feels big.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-head">
+      <div class="eyebrow">Core loop</div>
+      <h2>Clear it, crack it, leave it</h2>
+      <p>Every level runs through the same five beats. The demo above plays the whole loop in about 40 seconds.</p>
+    </div>
+    <ol class="loop">
+      <li style="--c:var(--cyan)"><h3>Clear</h3><p>Collect every dot in the arena while the crash car hunts you lane by lane.</p></li>
+      <li style="--c:var(--yellow)"><h3>Crack</h3><p>The last dot cracks one section of the outer wall. The glyphs there flicker white.</p></li>
+      <li style="--c:var(--magenta)"><h3>Break out</h3><p>Reach the outer lane and turn through the crack. The wall bursts into loose characters.</p></li>
+      <li style="--c:var(--orange)"><h3>The in-between</h3><p>The camera drops from overhead to side-on. A short drive through an open glyph landscape, with the song changing.</p></li>
+      <li style="--c:var(--lime)"><h3>Arrive</h3><p>A new arena with a new shape, a new hue and one new rule.</p></li>
+    </ol>
+  </section>
+
+  <section class="sec">
+    <div class="sec-head">
+      <div class="eyebrow">Design rules</div>
+      <h2>What holds it together</h2>
+    </div>
+    <div class="rules">
+      <div class="rule" style="--c:var(--orange)"><span class="g">█</span><h3>You're the only solid thing</h3><p>Walls, dots, enemies, sky and ground are all text characters. Your car is solid pixels, so you can always find it at a glance.</p></div>
+      <div class="rule" style="--c:var(--cyan)"><span class="g">↕</span><h3>One verb: change lanes</h3><p>The car never stops, like qomp's ball. You only choose where to turn at the gaps. Boost is the one other input.</p></div>
+      <div class="rule" style="--c:var(--magenta)"><span class="g">▓░</span><h3>The wall you break is the door</h3><p>The crack appears on a different side in each level, so every exit feels like a small discovery.</p></div>
+      <div class="rule" style="--c:var(--yellow)"><span class="g">⇄</span><h3>The crash car follows you out</h3><p>Sometimes it breaks out after you and chases you through the in-between. It works as a recurring rival.</p></div>
+      <div class="rule" style="--c:var(--lime)"><span class="g">♫</span><h3>One world, one hue, one song</h3><p>The now-playing chip names each world's track. Colors shift toward the next world's hue while you travel.</p></div>
+      <div class="rule" style="--c:var(--violet)"><span class="g">·:+#</span><h3>Density is information</h3><p>Denser glyphs mean solid or dangerous. Sparse glyphs are air and background. Players learn to read the screen this way.</p></div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-head">
+      <div class="eyebrow">Level ideas</div>
+      <h2>Six worlds, first pass</h2>
+      <p>Each world adds one rule to the classic lane-and-gap loop and one new way to break out. The demo only shows World 1.</p>
+    </div>
+    <div class="worlds">
+      <article class="world" style="--c:var(--cyan)">
+<pre>█████████████████
+█ <span class="dot">· · · · · · ·</span> █
+█ ██████ ██████ █
+█ █ <span class="dot">· · · · ·</span> █ █
+█   <span class="dot">·</span> █████ <span class="dot">·</span> <span class="me">■</span> ░
+█ █ <span class="dot">· · · · ·</span> █ █
+█ ██████ ██████ █
+█ <span class="dot">· · · · · · ·</span> █
+█████████████████</pre>
+        <div class="body"><span class="num">World 1</span><h3>The Square</h3><p>Classic Dodge 'Em. Four lanes, one crash car. This world teaches the gaps.</p>
+          <dl><dt>Break</dt><dd>One outer wall section shatters.</dd><dt>Song</dt><dd>Head On At Midnight</dd></dl></div>
+      </article>
+      <article class="world" style="--c:var(--orange)">
+<pre>   ░▒░       ░░▒░░
+ ░░          ░
+─────────────────
+▒▒▓▒ ▒▓▒▒ <span class="me">▄█▄</span> ▒▓▒
+▓█▓▓█▓▓▓█▓▓█▓▓▓█▓
+█ █ ██ █ ██ █ ██
+█▌█▐█ ██▌█ █▐██ █</pre>
+        <div class="body"><span class="num">In-between</span><h3>Offramp</h3><p>A side-on road between arenas, with three depth lanes. You hop between them to avoid oncoming glyph traffic.</p>
+          <dl><dt>Break</dt><dd>Reach the next arena's outer wall.</dd><dt>Song</dt><dd>Offramp Lullaby</dd></dl></div>
+      </article>
+      <article class="world" style="--c:var(--magenta)">
+<pre> █████   █████
+█ <span class="dot">· ·</span> █ █ <span class="dot">· ·</span> █
+█ ███ ███ ███ █
+█ <span class="dot">· ·</span>   <span class="me">■</span>   <span class="dot">· ·</span> █
+█ ███ ███ ███ █
+█ <span class="dot">· ·</span> █ █ <span class="dot">· ·</span> █
+ █████   █████</pre>
+        <div class="body"><span class="num">World 2</span><h3>Cloverleaf</h3><p>Four small loops that share their gaps, with two crash cars. The center crossing is where you score and where you crash.</p>
+          <dl><dt>Break</dt><dd>The center knot unties and all four walls open.</dd><dt>Song</dt><dd>Four Ways Home</dd></dl></div>
+      </article>
+      <article class="world" style="--c:var(--lime)">
+<pre>█████████████████
+█ <span class="dot">· · · · · · ·</span> █
+█ █████████████ █
+█ █ <span class="dot">· · · · ·</span> █ █
+█ █ █████████ █ █
+█ █ █ <span class="me">■</span>   ◆ █ █ █
+█ █ █████ ███ █ █
+█ <span class="dot">· · · · · · ·</span> █
+█████████████████</pre>
+        <div class="body"><span class="num">World 3</span><h3>The Spiral</h3><p>One long lane that winds inward. Gaps let you skip whole rings, and the crash car comes out from the core.</p>
+          <dl><dt>Break</dt><dd>Reach the core and the floor drops away.</dd><dt>Song</dt><dd>Inward</dd></dl></div>
+      </article>
+      <article class="world" style="--c:var(--violet)">
+<pre>█▓█░ ▒██▓█ ░▓█▒█
+▒ <span class="dot">·</span>   <span class="dot">·</span> ░ <span class="dot">·</span>   ▒ ▓
+█ ▓█▒░ ░ ▒█▓ ░ █
+░ ▒ <span class="dot">·</span> <span class="dot">·</span>   <span class="dot">·</span> ▓ ▒ ░
+▓   <span class="dot">·</span> ░▒█▓▒ <span class="me">■</span>   █
+░ █ <span class="dot">·</span>   <span class="dot">·</span> <span class="dot">·</span> ░ ▒ ▓
+█ ▒░▓█ ░ █▓▒ ░ ▒
+▓ <span class="dot">·</span>  <span class="dot">·</span>  ░ <span class="dot">·</span>  <span class="dot">·</span> █
+█▒█▓ ░██▒░ ▓█░█▓</pre>
+        <div class="body"><span class="num">World 4</span><h3>Static</h3><p>Radio interference. The walls are only fully drawn on the beat. Between beats they dissolve into noise and you drive by memory.</p>
+          <dl><dt>Break</dt><dd>Collect dots on the beat to tune in the signal.</dd><dt>Song</dt><dd>Between Stations</dd></dl></div>
+      </article>
+      <article class="world" style="--c:var(--yellow)">
+<pre>  88   92   96  101
+  ┃    ┃    ┃    ┃
+━━╋━━━━╋━━━━╋━━━━╋━━
+       ▲ <span class="me">■</span>
+ ╭───────────────╮
+ │ <span class="dot">· ·</span> TUNER <span class="dot">· ·</span> │
+ ╰───────────────╯</pre>
+        <div class="body"><span class="num">World 5 · Finale</span><h3>The Dial</h3><p>The arena is a radio tuner. Each station brings back the rule set of an earlier world, and the crash car changes stations to chase you.</p>
+          <dl><dt>Break</dt><dd>Leave the radio entirely. The credits are a drive.</dd><dt>Song</dt><dd>We Made It Out</dd></dl></div>
+      </article>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-head">
+      <div class="eyebrow">Look &amp; sound</div>
+      <h2>Neon text on a night-radio ground</h2>
+      <p>The layout follows the Claude FM screen: a dithered text landscape with one solid sprite and a black track chip. The color follows Breakout Beyond. Each world has its own hue band, and the player's orange never changes.</p>
+    </div>
+    <div class="look">
+      <div>
+        <div class="swatches">
+          <div class="sw" style="--c:#0B0A12"><i style="border:1px solid var(--line)"></i>Ground<span>#0B0A12</span></div>
+          <div class="sw" style="--c:#FF8A3D"><i></i>Player<span>#FF8A3D</span></div>
+          <div class="sw" style="--c:#FF3DA8"><i></i>Crash car<span>#FF3DA8</span></div>
+          <div class="sw" style="--c:#FFD23F"><i></i>Dots<span>#FFD23F</span></div>
+          <div class="sw" style="--c:#3DE0FF"><i></i>World 1<span>#3DE0FF</span></div>
+          <div class="sw" style="--c:#FF3DA8"><i style="background:linear-gradient(90deg,#FF3DA8,#FF8A3D)"></i>World 2<span>magenta → amber</span></div>
+          <div class="sw" style="--c:#A6FF3D"><i></i>World 3<span>#A6FF3D</span></div>
+          <div class="sw" style="--c:#8B5CFF"><i></i>World 4<span>#8B5CFF</span></div>
+        </div>
+        <div class="ramp">
+          <span class="chars">&nbsp;.·:-=+*#%▒▓█</span>
+          <small>Glyph ramp, from air to solid. The renderer turns every cell's brightness into one of these 13 characters.</small>
+        </div>
+      </div>
+      <div>
+        <div class="chipdemo"><span class="note">♫</span>01 · Head On At Midnight</div>
+        <ul class="track">
+          <li style="--c:var(--cyan)"><span class="n">01</span>Head On At Midnight<span class="w">Square</span></li>
+          <li style="--c:var(--orange)"><span class="n">02</span>Offramp Lullaby<span class="w">In-between</span></li>
+          <li style="--c:var(--magenta)"><span class="n">03</span>Four Ways Home<span class="w">Cloverleaf</span></li>
+          <li style="--c:var(--lime)"><span class="n">04</span>Inward<span class="w">Spiral</span></li>
+          <li style="--c:var(--violet)"><span class="n">05</span>Between Stations<span class="w">Static</span></li>
+          <li style="--c:var(--yellow)"><span class="n">06</span>We Made It Out<span class="w">Dial</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-head">
+      <div class="eyebrow">Open questions</div>
+      <h2>To settle before the prototype</h2>
+    </div>
+    <div class="qs">
+      <div class="q"><h3>Does the camera tilt between arenas?</h3><p>Overhead arenas with side-on in-betweens give the most contrast, but that means two control schemes.</p><span class="lean">Leaning: yes, with the same up/down input in both views.</span></div>
+      <div class="q"><h3>Lives, or no failure?</h3><p>The original uses lives. qomp2 is forgiving and restarts you nearby, which suits a journey.</p><span class="lean">Leaning: checkpoints per arena, with a classic lives mode.</span></div>
+      <div class="q"><h3>Two-player mode?</h3><p>Dodge 'Em let a second player drive the crash car. That could work as a versus mode.</p><span class="lean">Leaning: after the single-player run is fun.</span></div>
+      <div class="q"><h3>Platform and tech</h3><p>An HTML5 canvas glyph renderer is fast to prototype and runs everywhere. A console port can come later.</p><span class="lean">Leaning: web first, like this demo.</span></div>
+      <div class="q"><h3>How long is the run?</h3><p>Five worlds with three or four arenas each, plus in-betweens.</p><span class="lean">Leaning: a 2–3 hour first playthrough.</span></div>
+      <div class="q"><h3>Music</h3><p>Is the radio just framing, or does the beat drive gameplay beyond the Static world?</p><span class="lean">Open.</span></div>
+    </div>
+  </section>
+
+  <footer>
+    <span><b>Next step:</b> prototype one arena, the break, and one in-between in canvas.</span>
+    <span>References: Dodge 'Em (Atari, 1980) · Head On (Sega, 1979) · qomp2 (Atari, 2024) · Breakout Beyond (Atari, 2025) · Claude FM visuals</span>
+  </footer>
+</div>
+
+<script>
+(function(){
+  const stage=document.getElementById('stage');
+  const cv=document.getElementById('cv');
+  const ctx=cv.getContext('2d');
+  const $=id=>document.getElementById(id);
+  const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const LEVELS=[
+    {name:'1-1 · NEON SQUARE',   track:'01 · Head On At Midnight', hue:185, range:95},
+    {name:'1-2 · SUNSET SQUARE', track:'01 · Head On At Midnight (reprise)', hue:300, range:95},
+    {name:'1-3 · ACID SQUARE',   track:'01 · Head On At Midnight (dub)', hue:75, range:100},
+  ];
+  const MIDS=[0.125,0.375,0.625,0.875];
+  const DOTN=[24,19,13,8];
+  const RAMP=' .·:-=+*#%▒▓█';
+
+  let W,H,dpr,cw,chh,cols,rows,cx,cy,HH,L,fontPx;
+  function resize(){
+    const r=stage.getBoundingClientRect();
+    dpr=Math.min(2,window.devicePixelRatio||1);
+    W=Math.max(1,r.width); H=Math.max(1,r.height);
+    cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr);
+    const small=W<560;
+    cw=small?7:8; chh=small?11:13; fontPx=small?10:11.5;
+    cols=Math.ceil(W/cw); rows=Math.ceil(H/chh);
+    cx=W/2; cy=H/2;
+    const S=Math.min(W,H)*0.88; HH=S/2; L=S/10;
+  }
+
+  // noise
+  function hash(x,y){let h=(Math.imul(x|0,374761393)+Math.imul(y|0,668265263))|0;h=Math.imul(h^(h>>>13),1274126177);h^=h>>>16;return (h>>>0)/4294967296;}
+  function noise(x,y){const xi=Math.floor(x),yi=Math.floor(y);let xf=x-xi,yf=y-yi;xf=xf*xf*(3-2*xf);yf=yf*yf*(3-2*yf);
+    const a=hash(xi,yi),b=hash(xi+1,yi),c=hash(xi,yi+1),d=hash(xi+1,yi+1);return a+(b-a)*xf+(c-a)*yf+(a-b-c+d)*xf*yf;}
+  const hsl=(h,s,l,a)=>a===undefined?`hsl(${h|0} ${s}% ${l|0}%)`:`hsl(${h|0} ${s}% ${l|0}% / ${a})`;
+
+  // state
+  let phase='arena', pt=0, li=0, paused=false, t=0;
+  let P,E,dots,broken,parts=[],crashes=0,score=0,freeze=0,userInput=0,userTimer=0,boost=false,roadScroll=0;
+  let mode='attract', lives=3;
+
+  function resetArena(){
+    P={u:0.6,laneF:0,target:0,exit:false,x:0,y:0,flash:0};
+    E={u:0.1,laneF:3,target:3,x:0,y:0};
+    dots=DOTN.map(n=>Array.from({length:n},(_,i)=>({u:(i+0.5)/n,e:false})));
+    broken=false;
+    $('hudLv').textContent='WORLD '+LEVELS[li].name;
+    $('hudNp').textContent=LEVELS[li].track;
+  }
+  function lanePos(laneF,u){
+    const h=HH-(laneF+0.5)*L; const p=(((u%1)+1)%1)*4; const s=Math.floor(p),f=p-s;
+    if(s===0)return[-h+2*h*f,-h]; if(s===1)return[h,-h+2*h*f]; if(s===2)return[h-2*h*f,h]; return[-h,h-2*h*f];
+  }
+  const remaining=k=>dots[k].reduce((n,d)=>n+(d.e?0:1),0);
+  const totalLeft=()=>dots.reduce((n,l,k)=>n+remaining(k),0);
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+  function onPlayerGap(m){
+    if(phase==='escape'&&broken&&P.target===0&&Math.abs(P.laneF)<0.05&&m===0.375){P.exit=true;P.u=0.375;return;}
+    if(userInput){P.target=clamp(P.target+userInput,0,3);userInput=0;showQueue();return;}
+    if(mode==='play')return;
+    if(phase!=='arena'){P.target=Math.max(0,P.target-1);return;}
+    let best=P.target,bs=-1e9;
+    for(const k of [P.target-1,P.target,P.target+1]){
+      if(k<0||k>3)continue;
+      let s=remaining(k)+Math.random()*2.5;
+      if(k===E.target)s-=40;
+      if(k===P.target)s+=1;
+      if(s>bs){bs=s;best=k;}
+    }
+    P.target=best;
+  }
+  function onEnemyGap(){
+    if(Math.random()<0.25)return;
+    const pl=P.target;
+    if(E.target<pl)E.target++;else if(E.target>pl)E.target--;
+  }
+  function burst(x,y,n,hue,spd){
+    for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,v=(0.3+Math.random())*spd;
+      parts.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,ch:RAMP[6+(Math.random()*7|0)],hue:hue+Math.random()*40,life:0.6+Math.random()*0.8,max:1.4});}
+  }
+  function crash(){
+    freeze=0.7;crashes++;P.flash=0.7;
+    burst(cx+P.x,cy+P.y,40,320,220);
+    E.u=(P.u+0.5)%1;E.target=E.laneF=P.target>=2?0:3;
+    if(mode==='play'){lives--;if(lives<=0)gameOver();}
+  }
+  function showOverlay(small,title,btn){
+    $('ovSmall').textContent=small;$('ovTitle').textContent=title;$('bPlay').textContent=btn;$('overlay').hidden=false;
+  }
+  function gameOver(){
+    mode='over';
+    showOverlay(`GAME OVER · SCORE ${score} · REACHED ${LEVELS[li].name.split(' · ')[0]}`,'The crash car got you','▶ Play again');
+  }
+  function startGame(){
+    mode='play';li=0;score=0;crashes=0;lives=3;parts=[];userInput=0;freeze=0;boost=false;
+    resetArena();setPhase('arena');showQueue();
+    $('overlay').hidden=true;stage.focus({preventScroll:true});
+  }
+  function showQueue(){
+    $('hudQ').textContent=userInput===1?'Next gap: inner ↑':userInput===-1?'Next gap: outer ↓':'';
+  }
+  function shatter(){
+    broken=true;
+    const lv=LEVELS[li];
+    for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+      const x=(c+0.5)*cw-cx,y=(r+0.5)*chh-cy;
+      if(x>0&&Math.abs(x)>=Math.abs(y)&&Math.abs(x-HH)<cw*0.6){
+        parts.push({x:cx+x,y:cy+y,vx:80+Math.random()*320,vy:(Math.random()-0.5)*260,ch:RAMP[8+(Math.random()*5|0)],hue:lv.hue+Math.random()*lv.range,life:1+Math.random()*1.4,max:2.4});
+      }
+    }
+  }
+  function setPhase(p){phase=p;pt=0;
+    const cap={arena:'Clear the lanes',crack:'The wall is cracking',escape:'Get to the outer lane · exit east',road:'In between · Route '+(li+1)+'-A',arrive:''}[p];
+    $('hudCap').textContent=cap;
+    if(p==='road'){$('hudNp').textContent='02 · Offramp Lullaby';$('hudLv').textContent='OFFRAMP · ROUTE '+(li+1)+'-A';
+      $('bannerTxt').textContent=LEVELS[(li+1)%LEVELS.length].name.replace(' · ',' ');}
+    $('banner').classList.toggle('on',false);
+  }
+
+  function update(dt){
+    t+=dt; pt+=dt;
+    if(userTimer>0)userTimer-=dt;
+    for(const p of parts){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=0.985;p.vy*=0.985;p.life-=dt;}
+    parts=parts.filter(p=>p.life>0);
+    if(phase==='road'){
+      roadScroll+=dt*(boost?1.6:1);
+      if(pt>2.2&&pt<6.4)$('banner').classList.add('on'); else $('banner').classList.remove('on');
+      if(pt>7.2){li=(li+1)%LEVELS.length;resetArena();setPhase('arena');}
+      return;
+    }
+    if(freeze>0){freeze-=dt;P.flash=Math.max(0,P.flash-dt);return;}
+    P.flash=Math.max(0,P.flash-dt);
+    const sp=5.2*L*(boost?1.6:1);
+    // player
+    if(!P.exit){
+      const h=HH-(P.laneF+0.5)*L; const prev=P.u; const nu=prev-sp*dt/(8*h);
+      for(const m of MIDS){if(prev>m&&nu<=m)onPlayerGap(m);}
+      if(!P.exit){P.u=((nu%1)+1)%1;}
+      P.laneF+=clamp(P.target-P.laneF,-dt*10,dt*10);
+      [P.x,P.y]=lanePos(P.laneF,P.u);
+      const k=Math.round(P.laneF);
+      if(Math.abs(P.laneF-k)<0.3){
+        const perim=8*(HH-(k+0.5)*L);
+        for(const d of dots[k]){if(d.e)continue;let du=Math.abs(d.u-P.u);du=Math.min(du,1-du);
+          if(du*perim<L*0.45){d.e=true;score+=10;const [x,y]=lanePos(k,d.u);burst(cx+x,cy+y,5,45,60);}}
+      }
+    } else {
+      P.x+=sp*1.2*dt;
+      if(cx+P.x>W+30){roadScroll=0;setPhase('road');return;}
+    }
+    // enemy
+    const he=HH-(E.laneF+0.5)*L; const pe=E.u; const ne=pe+sp*0.9*dt/(8*he);
+    for(const m of MIDS){if(pe<m&&ne>=m)onEnemyGap();}
+    E.u=ne%1; E.laneF+=clamp(E.target-E.laneF,-dt*10,dt*10);
+    [E.x,E.y]=lanePos(E.laneF,E.u);
+    if(phase==='arena'){
+      if(Math.hypot(P.x-E.x,P.y-E.y)<L*0.6)crash();
+      const left=totalLeft();
+      if(mode==='over'){}
+      else if(left===0||(mode==='attract'&&(left<=8||pt>40))){setPhase('crack');}
+    } else if(phase==='crack'){
+      if(pt>1.1){shatter();setPhase('escape');}
+    }
+  }
+
+  // sprites
+  const TOP=['.XXXX.','XXXXXX','XoXXoX','XXXXXX','X.XX.X'];
+  const SIDE=['..XXXX..','.XXoXXX.','XXXXXXXX','XXXXXXXX','.O....O.'];
+  function sprite(rows_,x,y,px,body,dark){
+    const w=rows_[0].length*px,h=rows_.length*px;
+    for(let r=0;r<rows_.length;r++)for(let c=0;c<rows_[r].length;c++){
+      const ch=rows_[r][c]; if(ch==='.')continue;
+      ctx.fillStyle=ch==='X'?body:dark;
+      ctx.fillRect(Math.round(x-w/2+c*px),Math.round(y-h/2+r*px),Math.ceil(px),Math.ceil(px));
+    }
+  }
+
+  function drawArena(){
+    const lv=LEVELS[li];
+    const thrX=cw*0.55,thrY=chh*0.55,gapH=L*0.6;
+    const flick=phase==='crack'&&((t*14|0)%2===0);
+    const drift=reduce?0.03:0.15;
+    for(let r=0;r<rows;r++){
+      const y=(r+0.5)*chh-cy, ay=Math.abs(y), py=(r+0.5)*chh;
+      for(let c=0;c<cols;c++){
+        const x=(c+0.5)*cw-cx, ax=Math.abs(x), d=Math.max(ax,ay);
+        const vert=ax>=ay;
+        const kf=(HH-d)/L, k=Math.round(kf);
+        const thr=vert?thrX:thrY;
+        let ch=null,col=null;
+        if(k>=0&&k<=4&&Math.abs(kf-k)*L<thr){
+          const along=vert?ay:ax;
+          const isGap=k>=1&&k<=3&&along<gapH;
+          const eastOuter=k===0&&x>0&&vert;
+          if(!isGap&&!(broken&&eastOuter)){
+            const hv=hash(c,r);
+            ch=hv<0.55?'▓':hv<0.8?'█':hv<0.93?'▒':'#';
+            if(!reduce&&hash(c,r+((t*6)|0))<0.02)ch='%';
+            const ang=Math.atan2(y,x)/(Math.PI*2)+0.5;
+            const hue=lv.hue+Math.sin(ang*Math.PI*2+t*0.6)*lv.range*0.5+lv.range*0.5*(k/4);
+            col=hsl(hue,95,58+k*3);
+            if(eastOuter&&phase==='crack'){col=flick?'#ffffff':hsl(hue,100,80);ch=flick?'░':'▒';}
+          }
+        } else if(d<HH-4*L-thr){
+          if(hash(c,r)<0.5){ch='░';col=hsl(lv.hue+lv.range,60,22);}
+        }
+        if(!ch){
+          const n=noise(c*0.07+t*drift,r*0.11-t*drift*0.3);
+          const inside=d<HH;
+          if(n>0.6){
+            const q=(n-0.6)/0.4;
+            ch=RAMP[1+Math.min(5,(q*6)|0)];
+            col=hsl(lv.hue+n*90,70,inside?(12+q*16):(18+q*40));
+          } else if(hash(c,r+((t*3)|0))<0.004){ch='.';col=hsl(lv.hue,40,30);}
+        }
+        if(ch){ctx.fillStyle=col;ctx.fillText(ch,(c+0.5)*cw,py);}
+      }
+    }
+    // dots
+    for(let k=0;k<4;k++)for(const d of dots[k]){if(d.e)continue;
+      const [x,y]=lanePos(k,d.u); const c=Math.floor((cx+x)/cw), r=Math.floor((cy+y)/chh);
+      ctx.fillStyle=(hash(c,r+((t*4)|0))<0.1)?'#FFF6C8':'#FFD23F';
+      ctx.fillText('•',(c+0.5)*cw,(r+0.5)*chh);
+    }
+  }
+
+  function drawRoad(){
+    const from=LEVELS[li], to=LEVELS[(li+1)%LEVELS.length];
+    const hr=Math.floor(rows*0.55), gr=rows-hr;
+    const s=roadScroll*(reduce?4:9);
+    const k=clamp(pt/7,0,1);
+    for(let r=0;r<rows;r++){
+      const py=(r+0.5)*chh;
+      for(let c=0;c<cols;c++){
+        const fx=c/cols;
+        const hue=from.hue+(to.hue-from.hue)*clamp(fx*0.6+k*0.8,0,1);
+        let ch=null,col=null;
+        if(r<hr){
+          const n=noise(c*0.09+s*0.15,r*0.35);
+          const n2=noise(c*0.3+s*0.15,r*0.9+5);
+          if(n>0.66&&n2>0.35){const q=(n-0.66)/0.34;ch='.,:;~=+'[Math.min(6,(q*7)|0)];col=hsl(hue+30,60,40+q*35);}
+          else if(hash(c+(s*0.05|0),r)<0.004){ch='·';col=hsl(hue,40,45);}
+        } else {
+          const d=(r-hr)/gr;
+          const par=0.4+d*2.2;
+          const n=noise(c*0.12/(0.6+d)+s*par,r*1.1);
+          const grass=noise(c*0.45+s*3.2,1.7)*0.35+0.1;
+          if(d>1-grass){
+            ch=hash(c+Math.floor(s*3.2*2),r)<0.5?'█':'▌';col=hsl(hue-10,85,14+ (1-d)*60);
+          } else if(r===hr){ch='─';col=hsl(hue,90,65);}
+          else if(n>0.72-d*0.55){
+            const q=clamp((n-(0.72-d*0.55))/0.4,0,1);
+            ch=RAMP[Math.min(12,3+((q+d)*6)|0)];col=hsl(hue+q*25,90,30+ q*45 - d*10);
+          }
+        }
+        if(ch){ctx.fillStyle=col;ctx.fillText(ch,(c+0.5)*cw,py);}
+      }
+    }
+    const px=Math.max(2,L*0.11);
+    const carX=Math.min(W*0.42,-40+pt*W*0.45);
+    const carY=(hr+gr*0.18)*chh+(reduce?0:Math.sin(t*14)*1.5);
+    // exhaust glyphs
+    ctx.fillStyle='rgba(255,210,63,.7)';
+    for(let i=1;i<5;i++){ctx.fillText(i%2?'=':'-',carX-px*5-i*cw*1.2,carY+px*1.5);}
+    sprite(SIDE,carX,carY,px,'#FF8A3D','#3A1A0A');
+  }
+
+  function drawParts(){
+    for(const p of parts){ctx.fillStyle=hsl(p.hue,95,65,clamp(p.life/1.2,0,1));ctx.fillText(p.ch,p.x,p.y);}
+  }
+
+  function render(){
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.fillStyle='#07060C';ctx.fillRect(0,0,W,H);
+    ctx.font=`${fontPx}px "JetBrains Mono", ui-monospace, Consolas, monospace`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    if(phase==='road'){drawRoad();}
+    else{
+      drawArena();
+      const px=Math.max(2,L*0.11);
+      const eDim=phase!=='arena'?0.55:1;
+      ctx.globalAlpha=eDim;sprite(TOP,cx+E.x,cy+E.y,px,'#FF3DA8','#3A0620');ctx.globalAlpha=1;
+      const blink=P.flash>0&&((t*16|0)%2===0);
+      if(!blink)sprite(TOP,cx+P.x,cy+P.y,px,'#FF8A3D','#3A1A0A');
+    }
+    drawParts();
+    let fa=0;
+    if(phase==='road'){fa=Math.max(0,1-pt/0.5,(pt-6.7)/0.5);}
+    else if(phase==='arena'){fa=Math.max(0,1-pt/0.6);}
+    if(fa>0){ctx.fillStyle=`rgba(7,6,12,${clamp(fa,0,1)})`;ctx.fillRect(0,0,W,H);}
+  }
+
+  let hudT=0;
+  function hud(){
+    const lf=mode==='attract'?`CRASHES ${crashes}`:`LIVES ${'♥'.repeat(Math.max(0,lives))}`;
+    if(phase==='road')$('hudSt').textContent=`SCORE ${score} · ${lf}`;
+    else $('hudSt').textContent=`DOTS ${totalLeft()} · SCORE ${score} · ${lf}`;
+  }
+
+  let last=performance.now();
+  function frame(now){
+    const dt=Math.min(0.05,(now-last)/1000);last=now;
+    if(!paused){update(dt);render();
+      hudT+=dt;if(hudT>0.12){hud();hudT=0;}
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // input
+  function steer(dir){
+    if(mode!=='play'){startGame();}
+    userInput=dir;showQueue();
+  }
+  $('bPlay').addEventListener('click',e=>{e.stopPropagation();startGame();});
+  $('bIn').addEventListener('click',()=>steer(1));
+  $('bOut').addEventListener('click',()=>steer(-1));
+  const bb=$('bBoost');
+  bb.addEventListener('pointerdown',()=>{boost=true;});
+  ['pointerup','pointerleave','pointercancel'].forEach(ev=>bb.addEventListener(ev,()=>{boost=false;}));
+  $('bBreak').addEventListener('click',()=>{if(phase==='arena'&&mode!=='over'){for(const l of dots)for(const d of l)d.e=true;setPhase('crack');}});
+  $('bPause').addEventListener('click',e=>{paused=!paused;e.currentTarget.textContent=paused?'Resume':'Pause';last=performance.now();});
+  stage.addEventListener('pointerdown',e=>{
+    if(mode!=='play'||e.target.closest('.overlay'))return;
+    const r=stage.getBoundingClientRect();
+    steer(e.clientY-r.top<r.height/2?1:-1);
+    stage.focus({preventScroll:true});
+  });
+  window.addEventListener('keydown',e=>{
+    if(mode!=='play'){
+      if(e.key==='Enter'&&document.activeElement===stage){startGame();e.preventDefault();}
+      return;
+    }
+    const k=e.key.toLowerCase();
+    if(k==='arrowup'||k==='w'){steer(1);e.preventDefault();}
+    else if(k==='arrowdown'||k==='s'){steer(-1);e.preventDefault();}
+    else if(k===' '){boost=true;e.preventDefault();}
+    else if(k==='escape'||k==='p'){$('bPause').click();}
+  });
+  window.addEventListener('keyup',e=>{if(e.key===' ')boost=false;});
+  window.addEventListener('blur',()=>{boost=false;});
+
+  function start(){resize();resetArena();setPhase('arena');pt=0.6;render();hud();requestAnimationFrame(frame);}
+  new ResizeObserver(()=>{resize();}).observe(stage);
+  if(document.fonts&&document.fonts.load){
+    Promise.race([document.fonts.load('12px "JetBrains Mono"'),new Promise(r=>setTimeout(r,1200))]).then(start,start);
+  } else start();
+})();
+</script>
