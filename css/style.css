@@ -49,6 +49,7 @@ html, body {
   color: var(--ink);
   overflow: hidden;
   overscroll-behavior: none;
+  touch-action: none; /* no browser pan / pull-to-refresh gestures anywhere: they can knock the game out of fullscreen */
 }
 
 html {

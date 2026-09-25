@@ -1795,7 +1795,7 @@
       if (PREVENT_KEYS[k]) e.preventDefault();
       if (e.repeat) return;
       if (k === 'm') { musicToggle(); return; }
-      if (k === 'f') { ui.toggleFullscreen(); return; }
+      if (k === 'f') { userFs(); return; }
       if (k === 'p' || k === 'escape') { game.togglePause(); return; }
       if (IGNORE_KEYS[k]) return;
       if (k === 'enter' && isButton(e.target)) return; // let Enter activate a focused HUD button
@@ -1825,10 +1825,24 @@
       if (portrait.addEventListener) portrait.addEventListener('change', onOrient);
       else if (portrait.addListener) portrait.addListener(onOrient);
     }
-    var triedLandscape = false;
+    // Block browser swipe gestures page-wide (except inside scrollable cards/menus), so a swipe
+    // never scrolls or pulls-to-refresh and drops fullscreen.
+    document.addEventListener('touchmove', function (e) {
+      var t = e.target, scroller = t && t.closest && t.closest('.card, .lv-grid');
+      if (scroller && scroller.scrollHeight > scroller.clientHeight + 1) return;
+      if (e.cancelable) e.preventDefault();
+    }, { passive: false });
+    // If fullscreen is dropped anyway (e.g. iPad / Samsung "swipe down to exit"), pause, and the next tap restores it.
+    var onFsChange = function () {
+      if (!(document.fullscreenElement || document.webkitFullscreenElement) && self.wantFs) { self.releaseAll(); game.setPaused(true); }
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    document.addEventListener('webkitfullscreenchange', onFsChange);
     stage && stage.addEventListener('pointerdown', function (e) {
-      if (triedLandscape || e.pointerType === 'mouse') return;
-      triedLandscape = true;
+      if (e.pointerType === 'mouse') return;
+      if (document.fullscreenElement || document.webkitFullscreenElement) return;
+      if (self.wantFs === false) return; // the player left fullscreen on purpose (button / F)
+      self.wantFs = true;
       try {
         var root = document.documentElement, fs = document.fullscreenElement || document.webkitFullscreenElement;
         var req = !fs && (root.requestFullscreen || root.webkitRequestFullscreen);
@@ -1869,7 +1883,9 @@
     });
     on('bPause', function () { game.togglePause(); });
     on('bMusic', musicToggle);
-    on('bFull', function () { ui.toggleFullscreen(); });
+    // the fullscreen button / F key: leaving fullscreen on purpose must not be undone by the next tap
+    var userFs = function () { self.wantFs = !(document.fullscreenElement || document.webkitFullscreenElement); ui.toggleFullscreen(); };
+    on('bFull', userFs);
     on('bLevels', function () { if (ui.menuOpen) ui.closeLevels(false); else ui.openLevels(); });
     on('bLvClose', function () { ui.closeLevels(false); });
     on('bLvReset', function () { ui.closeLevels(true); game.resetProgress(); ui.screens(); ui.hud(); });
