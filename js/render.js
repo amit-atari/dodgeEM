@@ -134,7 +134,9 @@
   };
 
   // width / height of the play area: the game shapes level 1 and INFINITY to it
+  // Computers and tablets keep the classic square arena (aspect 1); only phones fill their screen.
   Renderer.prototype.playAspect = function () {
+    if (!(DE.isPhone && DE.isPhone())) return 1;
     return Math.max(1, this.W - 12) / Math.max(1, this.H - this.hudTop - 8);
   };
 

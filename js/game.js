@@ -99,6 +99,27 @@
     return { hx: Math.round(hx * 2) / 2, hy: Math.round(hy * 2) / 2 };
   };
 
+  // Phones and tablets (finger is the main input) vs laptops / desktops (mouse or touchpad is the main
+  // input, including touch-screen laptops). Only phones / tablets get screen-shaped levels and auto fullscreen.
+  DE.isTouchDevice = function () {
+    try {
+      return window.matchMedia('(pointer: coarse)').matches && !window.matchMedia('(any-pointer: fine) and (hover: hover)').matches;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  // Phones only (touch device with a small screen). Tablets behave like computers: square level 1,
+  // normal INFINITY world, no automatic fullscreen, no "rotate" screen. They still get touch controls.
+  DE.isPhone = function () {
+    try {
+      var small = Math.min(window.screen.width || 9999, window.screen.height || 9999) < 600;
+      return small && DE.isTouchDevice();
+    } catch (e) {
+      return false;
+    }
+  };
+
   DE.lanePos = function (laneF, u) {
     var h = DE.HALF - (laneF + 0.5);
     var p = (((u % 1) + 1) % 1) * 4;
@@ -1868,7 +1889,7 @@
     // Turning the device upright pauses the game (a "rotate your device" screen covers it).
     // The first touch goes fullscreen and asks the browser to lock landscape (Android; iOS ignores it).
     var portrait = null;
-    try { portrait = window.matchMedia('(pointer: coarse) and (orientation: portrait)'); } catch (e) { /* old browser */ }
+    try { portrait = window.matchMedia('(pointer: coarse) and (hover: none) and (orientation: portrait) and (max-width: 599px)'); } catch (e) { /* old browser */ }
     var onOrient = function () {
       if (portrait && portrait.matches) { self.releaseAll(); game.setPaused(true); }
     };
@@ -1885,12 +1906,12 @@
     }, { passive: false });
     // If fullscreen is dropped anyway (e.g. iPad / Samsung "swipe down to exit"), pause, and the next tap restores it.
     var onFsChange = function () {
-      if (!(document.fullscreenElement || document.webkitFullscreenElement) && self.wantFs) { self.releaseAll(); game.setPaused(true); }
+      if (!(document.fullscreenElement || document.webkitFullscreenElement) && self.wantFs && DE.isPhone()) { self.releaseAll(); game.setPaused(true); }
     };
     document.addEventListener('fullscreenchange', onFsChange);
     document.addEventListener('webkitfullscreenchange', onFsChange);
     stage && stage.addEventListener('pointerdown', function (e) {
-      if (e.pointerType === 'mouse') return;
+      if (e.pointerType === 'mouse' || !DE.isPhone()) return; // only phones go fullscreen by themselves
       if (document.fullscreenElement || document.webkitFullscreenElement) return;
       if (self.wantFs === false) return; // the player left fullscreen on purpose (button / F)
       self.wantFs = true;
