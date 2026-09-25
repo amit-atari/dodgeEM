@@ -1202,14 +1202,14 @@
     // the moon, high over the city
     var mr = Math.max(10, Math.min(W, H) * 0.045), mx = W * 0.8, my = Math.max(this.hudTop + mr + 6, hr * chh * 0.28);
     ctx.save();
-    ctx.shadowColor = 'rgba(235,235,225,.7)';
+    ctx.shadowColor = 'rgba(230,110,80,.75)'; // a slightly red moon
     ctx.shadowBlur = mr * 1.2 * this.dpr;
-    ctx.fillStyle = '#E8E6DE';
+    ctx.fillStyle = '#EBA38C';
     ctx.beginPath();
     ctx.arc(mx, my, mr, 0, TAU);
     ctx.fill();
     ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(150,148,140,.55)'; // craters
+    ctx.fillStyle = 'rgba(160,80,62,.55)'; // craters
     ctx.beginPath(); ctx.arc(mx - mr * 0.35, my - mr * 0.2, mr * 0.22, 0, TAU); ctx.fill();
     ctx.beginPath(); ctx.arc(mx + mr * 0.3, my + mr * 0.3, mr * 0.16, 0, TAU); ctx.fill();
     ctx.beginPath(); ctx.arc(mx + mr * 0.15, my - mr * 0.45, mr * 0.1, 0, TAU); ctx.fill();
