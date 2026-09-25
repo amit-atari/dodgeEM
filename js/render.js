@@ -97,7 +97,7 @@
     var W = (this.W = Math.max(1, cssW || 1));
     var H = (this.H = Math.max(1, cssH || 1));
     var small = Math.min(W, H) < 700 || W * H < 600000;
-    var dpr = (this.dpr = Math.min(window.devicePixelRatio || 1, small ? 1.5 : 2));
+    var dpr = (this.dpr = Math.min(window.devicePixelRatio || 1, small ? 2.5 : 2));
     this.canvas.width = Math.max(1, Math.round(W * dpr));
     this.canvas.height = Math.max(1, Math.round(H * dpr));
 
@@ -114,13 +114,10 @@
     this.rows = Math.ceil(H / chh);
     this.fontPx = cw * 1.44;
 
-    // arena square
-    var portrait = H > W * 1.1;
-    var S = Math.max(40, Math.min(W * (portrait ? 0.9 : 0.94), (H - 56) * 0.94));
-    this.HH = S / 2;
-    this.L = S / 10;
-    this.cx = W / 2;
-    this.cy = H / 2 + Math.min(24, H * 0.03);
+    // play area under the HUD (the HUD is thinner on short landscape phones)
+    this.hudTop = H < 500 ? 34 : 56;
+    this.layoutKey = null;
+    this.useLayout(DE.HALF, DE.HALF);
 
     // road
     this.laneGap = Math.max(chh * 3.4, Math.min(H * 0.065, W * 0.14));
@@ -130,13 +127,34 @@
     this.fGlyph = this.fontPx + 'px ' + FONT_STACK;
     this.fDot = '800 ' + (this.fontPx * 2.7).toFixed(1) + 'px ' + FONT_STACK;
     this.fRoadDot = '800 ' + (this.fontPx * 2.7).toFixed(1) + 'px ' + FONT_STACK;
-    this.hintPx = Math.max(14, this.L * 0.55);
-    this.fHint = '800 ' + this.hintPx.toFixed(1) + 'px ' + FONT_STACK;
-    this.exitPx = Math.max(13, this.L * 0.5);
-    this.fExit = '800 ' + this.exitPx.toFixed(1) + 'px ' + FONT_STACK;
     this.fFloat = '800 ' + Math.max(12, this.fontPx * 1.3).toFixed(1) + 'px ' + FONT_STACK;
     this.labelPx = Math.max(14, this.fontPx * 1.8);
 
+    this.spriteCache = {};
+  };
+
+  // width / height of the play area: the game shapes level 1 and INFINITY to it
+  Renderer.prototype.playAspect = function () {
+    return Math.max(1, this.W - 12) / Math.max(1, this.H - this.hudTop - 8);
+  };
+
+  // Fit an arena of half-size hx x hy lanes into the play area (edge to edge) and rebuild the wall grid.
+  Renderer.prototype.useLayout = function (hx, hy) {
+    var key = hx + 'x' + hy;
+    if (this.layoutKey === key) return;
+    this.layoutKey = key;
+    var availW = this.W - 12, availH = this.H - this.hudTop - 8;
+    var L = Math.max(4, Math.min(availW / (2 * hx), availH / (2 * hy)));
+    this.L = L;
+    this.HX = hx * L;
+    this.HY = hy * L;
+    this.HH = Math.min(this.HX, this.HY);
+    this.cx = this.W / 2;
+    this.cy = this.hudTop + 4 + availH / 2;
+    this.hintPx = Math.max(14, L * 0.55);
+    this.fHint = '800 ' + this.hintPx.toFixed(1) + 'px ' + FONT_STACK;
+    this.exitPx = Math.max(13, L * 0.5);
+    this.fExit = '800 ' + this.exitPx.toFixed(1) + 'px ' + FONT_STACK;
     this.spriteCache = {};
     this.buildGrid();
   };
@@ -149,6 +167,7 @@
   Renderer.prototype.buildGrid = function () {
     var cols = this.cols, rows = this.rows, n = cols * rows;
     var cw = this.cw, chh = this.chh, cx = this.cx, cy = this.cy, HH = this.HH, L = this.L;
+    var HX = this.HX || HH, HY = this.HY || HH;
     var type = (this.gType = new Int8Array(n));   // -1 none, 0..4 wall k, 5 island fill
     var side = (this.gSide = new Uint8Array(n));
     var inside = (this.gIn = new Uint8Array(n));
@@ -162,13 +181,14 @@
       for (var c = 0; c < cols; c++) {
         var i = r * cols + c;
         var x = (c + 0.5) * cw - cx, ax = Math.abs(x);
-        var d = Math.max(ax, ay), vert = ax >= ay;
-        var kf = (HH - d) / L, k = Math.round(kf);
+        var ex = HX - ax, ey = HY - ay, vert = ex <= ey; // nearer a left/right side than a top/bottom one
+        var depth = Math.min(ex, ey), d = HH - depth;
+        var kf = depth / L, k = Math.round(kf);
         var h = hash(c, r);
         hv[i] = h;
         type[i] = -1;
         side[i] = vert ? (x > 0 ? 1 : 3) : (y < 0 ? 0 : 2);
-        inside[i] = d < HH ? 1 : 0;
+        inside[i] = depth > 0 ? 1 : 0;
         var ang = Math.atan2(y, x) + Math.PI;
         sa[i] = Math.sin(ang);
         ca[i] = Math.cos(ang);
@@ -176,7 +196,7 @@
           var along = vert ? ay : ax;
           var isGap = k >= 1 && k <= 3 && along < gapH;
           if (!isGap) type[i] = k;
-        } else if (d < HH - 4 * L - thrY) {
+        } else if (depth > 4 * L + thrY) {
           if (h < 0.5) type[i] = 5;
         }
       }
@@ -647,6 +667,7 @@
   Renderer.prototype.drawArena = function (state) {
     if (state.arena && state.arena.layout === 'beyond') { this.drawBeyond(state); return; }
     this.cam = { x: 0, y: 0 };
+    if (state.arena) this.useLayout(state.arena.layout === 'clover' ? DE.HALF : state.arena.hx || DE.HALF, state.arena.layout === 'clover' ? DE.HALF : state.arena.hy || DE.HALF);
     var ctx = this.ctx, C = state.cfg, A = state.arena, t = state.t || 0;
     var cols = this.cols, rows = this.rows, cw = this.cw, chh = this.chh;
     var cx = this.cx, cy = this.cy, L = this.L, HH = this.HH;
@@ -685,7 +706,7 @@
               else this.put(ck(hue, sat, 82), '▒', pxx, py);
             } else if (exitWall) {
               // distance from the side midpoint along the wall: 0 at the middle, 1 at the corners
-              var along = clover ? cAlong[i] : (exitSide === 1 || exitSide === 3 ? Math.abs(py - cy) : Math.abs(pxx - cx)) / HH;
+              var along = clover ? cAlong[i] : (exitSide === 1 || exitSide === 3 ? Math.abs(py - cy) / this.HY : Math.abs(pxx - cx) / this.HX);
               var dmg = crackReach - along; // > 0: this cell is cracked
               if (along < GATE_HALF && !clover) {
                 // a golden gate: bars across the middle of the wall that will open, glowing brighter as it cracks
@@ -779,12 +800,20 @@
   Renderer.prototype.drawBeyond = function (state) {
     var ctx = this.ctx, A = state.arena, t = state.t || 0, W = this.W, H = this.H;
     var cw = this.cw, chh = this.chh, cols = this.cols, rows = this.rows, L = this.L;
-    var bd = DE.BEYOND.bound, edge = bd + 0.45, vnoise = DE.vnoise, hash = DE.hash;
+    var bx = A.bx || DE.BEYOND.bound, by = A.by || DE.BEYOND.bound, vnoise = DE.vnoise, hash = DE.hash;
+    if (this.layoutKey !== 'beyond') {
+      this.layoutKey = 'beyond';
+      this.L = Math.max(10, (H - this.hudTop - 8) / 13);
+      this.cx = W / 2;
+      this.cy = this.hudTop + 4 + (H - this.hudTop - 8) / 2;
+      this.spriteCache = {};
+    }
+    L = this.L;
     // camera: follow the player, but never show more than a little past the world's edge
     var P0 = A.player, cam = this.cam || (this.cam = { x: 0, y: 0 });
-    var hvw = (W / 2) / L, hvh = (H / 2) / L, room = bd + 1.2;
-    var tx = hvw >= room ? 0 : clamp(P0.x, -(room - hvw), room - hvw);
-    var ty = hvh >= room ? 0 : clamp(P0.y, -(room - hvh), room - hvh);
+    var hvw = (W / 2) / L, hvh = (H / 2) / L, roomX = bx + 1.2, roomY = by + 1.2;
+    var tx = hvw >= roomX ? 0 : clamp(P0.x, -(roomX - hvw), roomX - hvw);
+    var ty = hvh >= roomY ? 0 : clamp(P0.y, -(roomY - hvh), roomY - hvh);
     if (state.pt < 0.1 || state.mode === 'ready') { cam.x = tx; cam.y = ty; }
     else { cam.x += (tx - cam.x) * 0.12; cam.y += (ty - cam.y) * 0.12; }
     var cx = this.cx - cam.x * L, cy = this.cy - cam.y * L; // screen position of the world origin
@@ -795,7 +824,7 @@
     for (var r = 0; r < rows; r++) {
       var py = (r + 0.5) * chh, wy = (py - cy) / L;
       for (var c = 0; c < cols; c++) {
-        var pxx = (c + 0.5) * cw, wx = (pxx - cx) / L, d = Math.max(Math.abs(wx), Math.abs(wy));
+        var pxx = (c + 0.5) * cw, wx = (pxx - cx) / L, d = Math.max(Math.abs(wx) - bx, Math.abs(wy) - by), edge = 0.45;
         var n = vnoise((wx) * 0.55 + t * drift, (wy) * 0.9 - t * drift * 0.4); // anchored to the world, so it scrolls with the camera
         if (Math.abs(d - edge) < thr * 1.4) {                 // glittering edge of the world
           var tw = hash(c, r + ((t * 6) | 0)), gi = (hash(r, c) * 5) | 0;
@@ -885,7 +914,8 @@
 
   // Outside the closed gate: "EXIT" plus a 5-step meter that fills as dots are eaten.
   Renderer.prototype.drawGateLabel = function (state) {
-    var A = state.arena, ctx = this.ctx, L = this.L, HH = this.HH, s = state.cfg.exitSide, v = DE.EXIT_VEC[s];
+    var A = state.arena, ctx = this.ctx, L = this.L, s = state.cfg.exitSide, v = DE.EXIT_VEC[s];
+    var HH = v[0] ? this.HX : this.HY, alongHalf = v[0] ? this.HY : this.HX; // to the gate side / along it
     var done = Math.round(5 * (1 - A.dotsLeft / Math.max(1, A.total)));
     var fs = this.exitPx, room = s === 0 ? this.cy - HH : s === 1 ? this.W - this.cx - HH : s === 2 ? this.H - this.cy - HH : this.cx - HH;
     var d = HH + Math.min(L * 1.3, Math.max(fs * 1.2, room * 0.55));
@@ -893,7 +923,7 @@
     var pulse = 0.55 + 0.45 * Math.sin((state.t || 0) * 3);
     ctx.save();
     // door frame around the gate so it reads as a door that will open
-    var half = GATE_HALF * HH, thick = Math.max(this.cw, this.chh) * 1.1;
+    var half = GATE_HALF * alongHalf, thick = Math.max(this.cw, this.chh) * 1.1;
     var gx = this.cx + v[0] * HH, gy = this.cy + v[1] * HH;
     var fw = v[0] ? thick : half * 2, fh = v[0] ? half * 2 : thick;
     ctx.strokeStyle = 'rgba(255,200,60,' + (0.55 + 0.4 * pulse).toFixed(3) + ')';
@@ -1062,9 +1092,11 @@
     var ctx = this.ctx, t = state.t || 0, L = this.L, HH = this.HH, cx = this.cx, cy = this.cy;
     var W = this.W, H = this.H, s = state.cfg.exitSide, vec = DE.EXIT_VEC[s];
     var vx = vec[0], vy = vec[1], fs = this.exitPx;
-    if (A.exitPoint) { // shift the whole marker sideways to the wall that broke
+    if (A.layout === 'clover' && A.exitPoint) { // shift the whole marker sideways to the wall that broke
       cx += (A.exitPoint.x - vx * DE.HALF) * L;
       cy += (A.exitPoint.y - vy * DE.HALF) * L;
+    } else if (A.layout !== 'clover') {
+      HH = vx ? this.HX : this.HY; // distance from the centre to the breaking side
     }
     var pulse = 0.55 + 0.45 * Math.sin(t * 8);
     var arrow = ARROW[DIRS[s]];
@@ -1110,11 +1142,22 @@
   // One skyline cell. col = scrolled column, w = building width (incl. a 1-column street),
   // maxH = tallest building in rows, seed picks the layer, up = rows above the horizon.
   // Returns null for sky, else { ch, l (lightness offset), win (lit window) }.
-  function building(col, w, maxH, seed, up) {
+  function building(col, w, maxH, seed, up, t) {
     var id = Math.floor(col / w), off = col - id * w;
     if (off >= w - 1) return null;                       // the street between buildings
     var h = 2 + Math.floor(DE.hash(id, seed) * (maxH - 1));
-    if (up > h) return null;
+    if (up > h) {
+      // some rooftops carry a network mast; its tip is a light that blinks hard on / off
+      if (DE.hash(id, seed + 11) < 0.4) {
+        var mastCol = 1 + Math.floor(DE.hash(id, seed + 13) * (w - 3)), mastH = 2 + Math.floor(DE.hash(id, seed + 17) * 3);
+        if (off === mastCol && up <= h + mastH) {
+          if (up < h + mastH) return { ch: up === h + 1 ? '╨' : '│', l: 10, win: false };
+          var on = ((t || 0) * 1.6 + DE.hash(id, seed + 19)) % 1 < 0.35; // sharp blink, each mast on its own beat
+          return { ch: on ? '●' : '·', l: 0, win: false, beacon: true, on: on };
+        }
+      }
+      return null;
+    }
     if (up === h) return { ch: off === 0 || off === w - 2 ? '▄' : '▀', l: 6, win: false };  // roof line
     if (off === 0 || off === w - 2) return { ch: '█', l: 2, win: false };                   // side walls
     if (up % 2 === 0 && off % 2 === 1) {                                                     // windows
@@ -1153,6 +1196,21 @@
     var CLOUD = RAMP.slice(1, 8); // ' .·:-=+' minus the space
     // city skyline above the road: two parallax layers of glyph buildings scrolling past
     var sFar = Math.floor(s * 0.35), sNear = Math.floor(s * 0.8);
+    // the moon, high over the city
+    var mr = Math.max(10, Math.min(W, H) * 0.045), mx = W * 0.8, my = Math.max(this.hudTop + mr + 6, hr * chh * 0.28);
+    ctx.save();
+    ctx.shadowColor = 'rgba(235,235,225,.7)';
+    ctx.shadowBlur = mr * 1.2 * this.dpr;
+    ctx.fillStyle = '#E8E6DE';
+    ctx.beginPath();
+    ctx.arc(mx, my, mr, 0, TAU);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(150,148,140,.55)'; // craters
+    ctx.beginPath(); ctx.arc(mx - mr * 0.35, my - mr * 0.2, mr * 0.22, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(mx + mr * 0.3, my + mr * 0.3, mr * 0.16, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(mx + mr * 0.15, my - mr * 0.45, mr * 0.1, 0, TAU); ctx.fill();
+    ctx.restore();
     var farMax = Math.max(2, Math.floor(hr * 0.85)), nearMax = Math.max(2, Math.floor(hr * 0.6));
 
     for (var r = 0; r < rows; r++) {
@@ -1168,10 +1226,18 @@
         var hue = colHue[c], x = (c + 0.5) * cw, n;
         if (zone === 0) {
           var up = hr - r; // rows above the horizon (1 = just above it)
-          var bn = building(c + sNear, 9, nearMax, 7, up);
-          if (bn) { this.put(rc(bn.win ? 45 : 220, bn.win ? 80 : 8, bn.win ? 62 : bn.l + 30), bn.ch, x, py); continue; }
-          var bf = building(c + sFar, 6, farMax, 3, up);
-          if (bf) { this.put(rc(bf.win ? 45 : 220, bf.win ? 60 : 6, bf.win ? 44 : bf.l + 14), bf.ch, x, py); continue; }
+          var bn = building(c + sNear, 9, nearMax, 7, up, t);
+          if (bn) {
+            if (bn.beacon) this.put(bn.on ? ck(0, 100, 60) : ck(0, 30, 30), bn.ch, x, py); // red tower light (red even on the grey road)
+            else this.put(rc(bn.win ? 45 : 220, bn.win ? 80 : 8, bn.win ? 62 : bn.l + 30), bn.ch, x, py);
+            continue;
+          }
+          var bf = building(c + sFar, 6, farMax, 3, up, t);
+          if (bf) {
+            if (bf.beacon) this.put(bf.on ? ck(0, 90, 50) : ck(0, 25, 24), bf.ch, x, py);
+            else this.put(rc(bf.win ? 45 : 220, bf.win ? 60 : 6, bf.win ? 44 : bf.l + 14), bf.ch, x, py);
+            continue;
+          }
           n = vnoise(c * 0.09 + sCloud, r * 0.35);
           if (n > 0.66 && vnoise(c * 0.3 + sCloud, r * 0.9 + 5) > 0.35) {
             var q = (n - 0.66) / 0.34;

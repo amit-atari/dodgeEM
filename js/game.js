@@ -76,6 +76,29 @@
     };
   };
 
+  // Rectangular arena (level 1 stretches to the screen's shape). hx / hy = outer half-width / half-height
+  // in lanes. Every side takes a quarter of u, so the gaps stay at DE.MIDS whatever the shape.
+  DE.rectPos = function (hx, hy, laneF, u) {
+    var ax = hx - (laneF + 0.5), ay = hy - (laneF + 0.5);
+    var p = (((u % 1) + 1) % 1) * 4, s = Math.min(3, Math.floor(p)), f = p - s;
+    if (s === 0) return [-ax + 2 * ax * f, -ay];
+    if (s === 1) return [ax, -ay + 2 * ay * f];
+    if (s === 2) return [ax - 2 * ax * f, ay];
+    return [-ax, ay - 2 * ay * f];
+  };
+  // length of the side that u is on, for lane laneF (top/bottom = width, left/right = height)
+  DE.rectSide = function (hx, hy, laneF, u) {
+    var s = Math.min(3, Math.floor((((u % 1) + 1) % 1) * 4));
+    return 2 * ((s % 2 === 0 ? hx : hy) - (laneF + 0.5));
+  };
+  // arena half-sizes for a screen aspect (width / height): the short side stays DE.HALF lanes
+  DE.arenaDims = function (aspect) {
+    var a = aspect > 0 ? aspect : 1, hx = DE.HALF, hy = DE.HALF;
+    if (a >= 1) hx = Math.min(DE.HALF * 2.4, DE.HALF * a);
+    else hy = Math.min(DE.HALF * 2.4, DE.HALF / a);
+    return { hx: Math.round(hx * 2) / 2, hy: Math.round(hy * 2) / 2 };
+  };
+
   DE.lanePos = function (laneF, u) {
     var h = DE.HALF - (laneF + 0.5);
     var p = (((u % 1) + 1) % 1) * 4;
@@ -265,8 +288,8 @@
 
   Game.prototype._placePlayer = function () {
     if (this.state.arena.layout === 'clover') { this._placeCloverPlayer(); return; }
-    var P = this.state.arena.player;
-    var p = DE.lanePos(P.laneF, P.u);
+    var A0 = this.state.arena, P = A0.player;
+    var p = DE.rectPos(A0.hx || DE.HALF, A0.hy || DE.HALF, P.laneF, P.u);
     P.x = p[0];
     P.y = p[1];
     var side = DE.sideOf(P.u), slide = P.target - P.laneF;
@@ -275,7 +298,7 @@
     else P.facing = (P.dir > 0 ? ENEMY_FACING : PLAYER_FACING)[side];
   };
   Game.prototype._placeEnemy = function (e) {
-    var p = DE.lanePos(e.laneF, e.u);
+    var A0 = this.state.arena, p = DE.rectPos(A0.hx || DE.HALF, A0.hy || DE.HALF, e.laneF, e.u);
     e.x = p[0];
     e.y = p[1];
     e.facing = ENEMY_FACING[DE.sideOf(e.u)];
@@ -288,18 +311,31 @@
     if (DE.levelConfig(S.level).layout === 'beyond') { this._startBeyond(silent); return; }
     S.cfg = DE.levelConfig(S.level);
     S.nextCfg = DE.levelConfig(S.level + 1);
+    var dim = DE.arenaDims(this.aspect), hx = dim.hx, hy = dim.hy;
     var dots = [], total = 0;
     for (var k = 0; k < DE.LANES; k++) {
-      var n = S.cfg.dotsPerLane[k], lane = [];
-      for (var i = 0; i < n; i++) lane.push({ u: (i + 0.5) / n, e: false });
+      var n = S.cfg.dotsPerLane[k], lane = [], lw = hx - (k + 0.5), lh = hy - (k + 0.5), per = 4 * (lw + lh);
+      // share the lane's dots between its sides by length, so long sides are not bare
+      var perSide = [lw, lh, lw, lh].map(function (len) { return Math.max(0, Math.round(n * 2 * len / per)); });
+      var diff = n - perSide.reduce(function (a, b) { return a + b; }, 0);
+      for (var fix = 0; diff !== 0 && fix < 8; fix++) { var si = fix % 4; if (diff > 0) { perSide[si]++; diff--; } else if (perSide[si] > 0) { perSide[si]--; diff++; } }
+      for (var sd = 0; sd < 4; sd++) {
+        for (var i = 0; i < perSide[sd]; i++) {
+          var u = (sd + (i + 0.5) / perSide[sd]) / 4, pp = DE.rectPos(hx, hy, k, u);
+          lane.push({ u: u, e: false, x: pp[0], y: pp[1] });
+        }
+      }
       dots.push(lane);
-      total += n;
+      total += lane.length;
     }
     var enemies = [];
     for (var j = 0; j < S.cfg.enemies; j++) {
       enemies.push({ u: (0.05 + j * 0.5) % 1, laneF: j ? 1 : 3, target: j ? 1 : 3, x: 0, y: 0, facing: 1, near: false });
     }
+    var ev = DE.EXIT_VEC[S.cfg.exitSide];
     S.arena = {
+      hx: hx, hy: hy, // this level's shape, fixed for the whole level
+      exitPoint: { x: ev[0] * hx, y: ev[1] * hy },
       dots: dots,
       dotsLeft: total,
       total: total,   // wall crack progress = 1 - dotsLeft / total
@@ -468,6 +504,19 @@
     this.selectLevel(1);
   };
   DE.MENU_LEVELS = 3; // the whole game: two arenas and the road between them
+
+  // The renderer reports the play area's shape (width / height). The level shown in 'ready' is rebuilt
+  // to fit (e.g. after rotating a phone); a level in progress keeps its shape until it ends.
+  Game.prototype.setAspect = function (a) {
+    if (!(a > 0) || Math.abs(a - (this.aspect || 0)) < 0.02) return;
+    this.aspect = a;
+    var S = this.state;
+    if (S.mode === 'ready' && !this.celebrating() && S.phase !== 'road') {
+      var pt = S.pt;
+      this._startLevel(true);
+      S.pt = pt;
+    }
+  };
 
   Game.prototype.celebrating = function () {
     return this.state.t < this.celebrateUntil;
@@ -646,20 +695,17 @@
     var S = this.state, A = S.arena, P = A.player;
     var k = Math.round(P.laneF);
     if (Math.abs(P.laneF - k) > 0.3) return;
-    var perim = 8 * (DE.HALF - (k + 0.5));
     var lane = A.dots[k];
     for (var i = 0; i < lane.length; i++) {
       var d = lane[i];
       if (d.e) continue;
-      var du = Math.abs(d.u - P.u);
-      du = Math.min(du, 1 - du);
-      if (du * perim >= EAT_DIST) continue;
+      if (Math.hypot(d.x - P.x, d.y - P.y) >= EAT_DIST) continue;
       d.e = true;
       A.dotsLeft--;
       S.combo = S.t - this.lastDotT < 1.0 ? S.combo + 1 : 1;
       this.lastDotT = S.t;
       var m = Math.min(5, 1 + Math.floor(S.combo / 6));
-      var p = DE.lanePos(k, d.u);
+      var p = [d.x, d.y];
       if (m > S.mult) {
         this._emit('combo', { mult: m, space: 'arena', x: p[0], y: p[1] });
         this._float('arena', p[0], p[1], 'COMBO x' + m, DE.COLORS.player);
@@ -696,7 +742,7 @@
     var S = this.state, A = S.arena, P = A.player, C = S.cfg;
     var sp = C.playerSpeed * S.speedMul * (S.phase === 'escape' ? AUTO_EXIT_BOOST : 1); // auto exit: hurry to the gate
     if (!P.exit) {
-      var h = DE.HALF - (P.laneF + 0.5), prev = P.u, nu = prev + (P.dir || -1) * (sp * dt) / (8 * h);
+      var prev = P.u, nu = prev + (P.dir || -1) * (sp * dt) / (4 * DE.rectSide(A.hx, A.hy, P.laneF, P.u));
       for (var i = 0; i < DE.MIDS.length; i++) {
         var m = DE.MIDS[i];
         if ((prev > m && nu <= m) || (prev < m && nu >= m)) {
@@ -715,14 +761,14 @@
       P.x += P.ex * sp * 1.3 * dt;
       P.y += P.ey * sp * 1.3 * dt;
       P.facing = C.exitSide;
-      if (Math.abs(P.x) > EXIT_DIST || Math.abs(P.y) > EXIT_DIST) {
+      if (Math.abs(P.x) > A.hx + 6 || Math.abs(P.y) > A.hy + 6) { // off screen: level done
         this._completeLevel();
         return;
       }
     }
     for (var j = 0; j < A.enemies.length; j++) {
       var e = A.enemies[j];
-      var he = DE.HALF - (e.laneF + 0.5), ep = e.u, enu = ep + (sp * C.enemySpeed * dt) / (8 * he);
+      var ep = e.u, enu = ep + (sp * C.enemySpeed * dt) / (4 * DE.rectSide(A.hx, A.hy, e.laneF, e.u));
       for (var q = 0; q < DE.MIDS.length; q++) if (ep < DE.MIDS[q] && enu >= DE.MIDS[q]) this._enemyGap(e);
       e.u = enu % 1;
       e.laneF += DE.clamp(e.target - e.laneF, -dt * 11, dt * 11);
@@ -760,20 +806,23 @@
       else if (m < P.u - 0.0005 && m > nm) nm = m;
     }
     if (nm < 0) nm = P.dir > 0 ? DE.MIDS[0] : DE.MIDS[3];
-    var h = DE.HALF - (P.laneF + 0.5);
-    var dist = wrap01(P.dir > 0 ? nm - P.u : P.u - nm) * 8 * h;
+    var dist = wrap01(P.dir > 0 ? nm - P.u : P.u - nm) * 4 * DE.rectSide(A.hx, A.hy, P.laneF, P.u);
     var queued = (this.dirMode && !!this.dirBuf.dir) || (!this.dirMode && !!this.tapQ);
     if (dist >= HINT_DIST && !queued) return;
     var s = DE.MIDS.indexOf(nm), k = P.target;
     var nt = this._decide(k, s);
-    var options = [];
-    if (k < 3) options.push({ dir: DE.INWARD[s], lane: nt === k + 2 ? k + 2 : k + 1, active: nt === k + 1 || nt === k + 2 });
-    if (k > 0) options.push({ dir: DE.OUTWARD[s], lane: nt === k - 2 ? k - 2 : k - 1, active: nt === k - 1 || nt === k - 2 });
+    var options = [], hx = A.hx, hy = A.hy;
+    var opt = function (dir, lane, active) { var q = DE.rectPos(hx, hy, lane, nm); return { dir: dir, lane: lane, x: q[0], y: q[1], active: active }; };
+    if (k < 3) options.push(opt(DE.INWARD[s], nt === k + 2 ? k + 2 : k + 1, nt === k + 1 || nt === k + 2));
+    if (k > 0) options.push(opt(DE.OUTWARD[s], nt === k - 2 ? k - 2 : k - 1, nt === k - 1 || nt === k - 2));
+    var st = DE.rectPos(hx, hy, k, nm);
     A.hint = {
       m: nm,
       alpha: queued ? 1 : DE.clamp(1 - dist / HINT_DIST, 0.25, 1),
       options: options,
-      stay: nt === k
+      stay: nt === k,
+      sx: st[0],
+      sy: st[1]
     };
   };
 
@@ -923,18 +972,19 @@
     var S = this.state, B = DE.BEYOND;
     S.cfg = DE.levelConfig(S.level);
     S.nextCfg = DE.levelConfig(S.level + 1);
+    var a = this.aspect > 0 ? this.aspect : 1;
+    var bx = B.bound * Math.max(1, Math.min(2, a)), by = B.bound * Math.max(1, Math.min(2, 1 / a)); // match the screen's shape
     var stars = [], tries = 0;
     while (stars.length < B.stars && tries++ < 2000) {
-      var x = (Math.random() * 2 - 1) * (B.bound - 0.4), y = (Math.random() * 2 - 1) * (B.bound - 0.4);
+      var x = (Math.random() * 2 - 1) * (bx - 0.4), y = (Math.random() * 2 - 1) * (by - 0.4);
       if (Math.hypot(x, y) < 2) continue; // keep clear of the start
       var ok = true;
       for (var i = 0; i < stars.length; i++) if (Math.hypot(stars[i].x - x, stars[i].y - y) < 2) { ok = false; break; }
       if (ok) stars.push({ x: x, y: y, e: false, u: 0 });
     }
-    var c0 = B.bound - 0.8;
     var enemies = [
-      { x: -c0, y: -c0, vx: 1, vy: 0, facing: 1, near: false },
-      { x: c0, y: c0, vx: -1, vy: 0, facing: 3, near: false }
+      { x: -(bx - 0.8), y: -(by - 0.8), vx: 1, vy: 0, facing: 1, near: false },
+      { x: bx - 0.8, y: by - 0.8, vx: -1, vy: 0, facing: 3, near: false }
     ].slice(0, S.cfg.enemies);
     var side = (Math.random() * 4) | 0, v = DE.EXIT_VEC[side];
     S.arena = {
@@ -943,7 +993,8 @@
       dotsLeft: stars.length,
       total: stars.length,
       broken: false,                 // true = the portal is open
-      exitPoint: { x: v[0] * (B.bound - 0.6), y: v[1] * (B.bound - 0.6) },
+      bx: bx, by: by,
+      exitPoint: { x: v[0] * (bx - 0.6), y: v[1] * (by - 0.6) },
       player: { x: 0, y: 0, hx: 0, hy: -1, tx: 0, ty: -1, angle: -Math.PI / 2, u: 0.55, laneF: 0, target: 0, inv: 2.0, exit: false, facing: 0, dir: -1 },
       enemies: enemies,
       hint: null
@@ -977,14 +1028,14 @@
   };
 
   Game.prototype._updateBeyond = function (dt) {
-    var S = this.state, A = S.arena, P = A.player, B = DE.BEYOND, bd = B.bound;
+    var S = this.state, A = S.arena, P = A.player, B = DE.BEYOND, bx = A.bx || B.bound, by = A.by || B.bound;
     var rt = this.runT || 0;
     var sp = B.speed * Math.min(B.speedMax, 1 + B.speedUp * rt);
     // more hunters over time, each from the corner farthest from you
     if (S.phase === 'arena' && A.enemies.length < B.maxHunters && rt >= (A.nextSpawn || B.spawnFirst)) {
       A.spawned = (A.spawned || 0) + 1;
       A.nextSpawn = (A.nextSpawn || B.spawnFirst) + Math.max(B.spawnMin, B.spawnEvery - B.spawnShrink * A.spawned);
-      var sx = P.x > 0 ? -(bd - 0.8) : bd - 0.8, sy = P.y > 0 ? -(bd - 0.8) : bd - 0.8;
+      var sx = P.x > 0 ? -(bx - 0.8) : bx - 0.8, sy = P.y > 0 ? -(by - 0.8) : by - 0.8;
       A.enemies.push({ x: sx, y: sy, vx: 0, vy: 0, facing: 0, near: false });
       this._float('arena', P.x, P.y, 'NEW HUNTER!', DE.COLORS.enemy);
     }
@@ -1006,8 +1057,8 @@
     P.angle = Math.atan2(P.hy, P.hx);
     P.facing = FACE_OF_VEC(P.hx, P.hy);
     // move along the heading, sliding along the edge of the world
-    P.x = DE.clamp(P.x + P.hx * sp * dt, -bd, bd);
-    P.y = DE.clamp(P.y + P.hy * sp * dt, -bd, bd);
+    P.x = DE.clamp(P.x + P.hx * sp * dt, -bx, bx);
+    P.y = DE.clamp(P.y + P.hy * sp * dt, -by, by);
     // stars
     var stars = A.dots[0];
     for (var i = 0; i < stars.length; i++) {
@@ -1040,8 +1091,8 @@
       var vl = Math.hypot(e.vx, e.vy) || 1, es = B.enemySpeed * Math.min(B.huntMax, 1 + B.huntUp * rt);
       e.x += (e.vx / vl) * es * dt;
       e.y += (e.vy / vl) * es * dt;
-      if (Math.abs(e.x) > bd) { e.x = DE.clamp(e.x, -bd, bd); e.vx = -e.vx; }
-      if (Math.abs(e.y) > bd) { e.y = DE.clamp(e.y, -bd, bd); e.vy = -e.vy; }
+      if (Math.abs(e.x) > bx) { e.x = DE.clamp(e.x, -bx, bx); e.vx = -e.vx; }
+      if (Math.abs(e.y) > by) { e.y = DE.clamp(e.y, -by, by); e.vy = -e.vy; }
       e.facing = FACE_OF_VEC(e.vx, e.vy);
       e.angle = Math.atan2(e.vy, e.vx);
       if (S.phase !== 'arena') continue;
@@ -1959,6 +2010,8 @@
       lastW = w;
       lastH = h;
       try { renderer.resize(w, h); } catch (e) { console.error('[DodgeEm] renderer.resize failed:', e); }
+      // level 1 and INFINITY take the screen's shape
+      try { if (renderer.playAspect) game.setAspect(renderer.playAspect()); } catch (e) { /* ignore */ }
     };
     if (typeof window.ResizeObserver === 'function' && stage) {
       new window.ResizeObserver(doResize).observe(stage);
