@@ -565,3 +565,9 @@ button { font: inherit; color: inherit; }
 @keyframes de-rotate { 0%, 25% { transform: rotate(0deg); } 60%, 100% { transform: rotate(-90deg); } }
 @media (pointer: coarse) and (hover: none) and (orientation: portrait) and (max-width: 599px) { .rotate { display: flex; } } /* phones only */
 @media (prefers-reduced-motion: reduce) { .rotate .phone { animation: none; transform: rotate(-90deg); } }
+
+/* short screens (phones in landscape): hide the now-playing chip so the HUD stays one row
+   and the playfield gets the height (the music keeps playing) */
+@media (max-height: 500px) {
+  .np { display: none !important; }
+}

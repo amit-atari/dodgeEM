@@ -1453,8 +1453,8 @@
       var S = game.state;
       setText(self.el.oScore, DE.pad6(p.score));
       setText(self.el.oBest, p.newBest ? 'NEW BEST!' : 'BEST ' + DE.pad6(p.hi));
-      var info = 'Level ' + p.level + ' · ';
-      if (p.won) info = 'GAME COMPLETE! You broke out of all ' + DE.FINAL_LEVEL + ' levels';
+      var info = 'Mode ' + p.level + ' · ';
+      if (p.won) info = 'FINISHED! You broke out of all ' + DE.FINAL_LEVEL + ' modes';
       else if (S.phase === 'road') info += 'Crashed on the road';
       else if (p.dotsLeft > 0) info += (p.dotsLeft <= 3 ? 'So close! ' : '') + p.dotsLeft + (p.dotsLeft === 1 ? ' dot left' : ' dots left');
       else info += 'So close to the exit!';
@@ -1510,7 +1510,7 @@
       var a = document.createElement('span'), t = document.createElement('span');
       a.className = 'lv-n';
       t.className = 'lv-t';
-      a.textContent = 'LEVEL ' + n + ' · ' + (cfg.kind === 'road' ? 'DODGE' : 'ARENA') + (n > S.checkpoint ? ' · 🔒' : '');
+      a.textContent = 'MODE ' + n + ' · ' + (cfg.kind === 'road' ? 'DODGE' : 'ARENA') + (n > S.checkpoint ? ' · 🔒' : '');
       t.textContent = cfg.name;
       b.appendChild(a);
       b.appendChild(t);
@@ -1571,7 +1571,7 @@
   ];
   UI.prototype.fillLevelCard = function () {
     var S = this.game.state, el = this.el;
-    setText(el.lKind, 'LEVEL ' + S.level + ' OF ' + DE.FINAL_LEVEL + (S.phase === 'road' ? ' · DODGE' : ' · ARENA') + (S.level >= DE.FINAL_LEVEL ? ' · FINAL' : ''));
+    setText(el.lKind, 'MODE ' + S.level + ' OF ' + DE.FINAL_LEVEL + (S.phase === 'road' ? ' · DODGE' : ' · ARENA') + (S.level >= DE.FINAL_LEVEL ? ' · FINAL' : ''));
     setText(el.lName, S.cfg.name);
     if (!el.lTips) return;
     var kind = S.phase === 'road' ? 'road' : S.cfg.layout === 'beyond' ? 'beyond' : S.cfg.layout === 'clover' ? 'clover' : 'arena';
@@ -1608,7 +1608,7 @@
 
   UI.prototype.hud = function () {
     var S = this.game.state, el = this.el, a = this.audio;
-    setText(el.hLv, 'LEVEL ' + S.level + ' · ' + S.cfg.name);
+    setText(el.hLv, 'MODE ' + S.level + ' · ' + S.cfg.name);
     // Beyond is a pale field: switch the HUD to dark text there
     if (el.stage) el.stage.classList.remove('pale'); // every level is dark now, so the HUD keeps its light text
     setText(el.hScore, DE.pad6(S.score));

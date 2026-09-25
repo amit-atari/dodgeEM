@@ -22,11 +22,11 @@
   <!-- "Add to Home Screen" on phones / tablets: opens as a fullscreen landscape app (no browser swipe-to-exit) -->
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icon.svg">
-  <link rel="stylesheet" href="css/style.css?v=54">
+  <link rel="stylesheet" href="css/style.css?v=59">
 
-  <script defer src="js/game.js?v=54"></script>
-  <script defer src="js/render.js?v=54"></script>
-  <script defer src="js/audio.js?v=54"></script>
+  <script defer src="js/game.js?v=59"></script>
+  <script defer src="js/render.js?v=59"></script>
+  <script defer src="js/audio.js?v=59"></script>
 </head>
 <body>
   <main class="app" id="app">
@@ -45,7 +45,7 @@
           </div>
           <div class="tr">
             <div class="np" title="Now playing"><span class="note" aria-hidden="true">♫</span><span class="np-text" id="hNp">01 · Head On At Midnight</span></div>
-            <button type="button" class="hbtn" id="bLevels" aria-label="Choose level">LEVELS</button>
+            <button type="button" class="hbtn" id="bLevels" aria-label="Choose mode">MODES</button>
             <button type="button" class="hbtn" id="bMusic" aria-label="Toggle music">MUSIC ON</button>
             <button type="button" class="hbtn" id="bPause" aria-label="Pause">II</button>
             <button type="button" class="hbtn icon" id="bFull" aria-label="Toggle fullscreen">
@@ -67,7 +67,7 @@
       </div>
 
       <div class="screen level-screen" id="sLevel" hidden>
-        <div class="card level-card" role="dialog" aria-label="Next level">
+        <div class="card level-card" role="dialog" aria-label="Next mode">
           <span class="lv-kind" id="lKind">LEVEL 2</span>
           <h1 id="lName">OFFRAMP 1</h1>
           <ul class="tips" id="lTips"></ul>
@@ -76,12 +76,12 @@
       </div>
 
       <div class="screen levels-screen" id="sLevels" hidden>
-        <div class="card levels-card" role="dialog" aria-label="Choose level">
-          <h1>Choose level</h1>
+        <div class="card levels-card" role="dialog" aria-label="Choose mode">
+          <h1>Choose mode</h1>
           <div class="lv-grid" id="lvGrid"></div>
           <div class="lv-actions">
             <button type="button" class="lv-close" id="bLvClose">✕ Close</button>
-            <button type="button" class="lv-reset" id="bLvReset">Start from level 1</button>
+            <button type="button" class="lv-reset" id="bLvReset">Start from mode 1</button>
           </div>
         </div>
       </div>

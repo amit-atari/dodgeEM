@@ -106,8 +106,16 @@
     var cw = W < 600 ? 7 : W > 1300 ? 9 : 8;
     cw = Math.max(cw, Math.sqrt((W * H) / (MAX_CELLS * aspect)));
     cw = Math.ceil(cw * 2) / 2;
+    // Short screens (phones in landscape): keep at least ~3.3 glyph rows per lane, or neighbouring
+    // walls round onto adjacent rows and look glued together. Finer cells, a higher cap.
+    var hudEst = hudBottom > 0 ? Math.min(H * 0.4, hudBottom + 6) : (H < 500 ? 34 : 56);
+    var lane0 = Math.min((W - 12) / 10, (H - hudEst - 8) / 10), cap = MAX_CELLS;
+    if (cw * aspect > lane0 / 3.3) {
+      cw = Math.max(4, Math.floor((lane0 / 3.3 / aspect) * 2) / 2);
+      cap = MAX_CELLS * 1.8;
+    }
     var chh = cw * aspect;
-    while (Math.ceil(W / cw) * Math.ceil(H / chh) > MAX_CELLS) { cw += 0.5; chh = cw * aspect; }
+    while (Math.ceil(W / cw) * Math.ceil(H / chh) > cap) { cw += 0.5; chh = cw * aspect; }
     this.cw = cw;
     this.chh = chh;
     this.cols = Math.ceil(W / cw);
@@ -187,6 +195,10 @@
         var ex = HX - ax, ey = HY - ay, vert = ex <= ey; // nearer a left/right side than a top/bottom one
         var depth = Math.min(ex, ey), d = HH - depth;
         var kf = depth / L, k = Math.round(kf);
+        // exactly one row (or column) per wall: the wall at depth k*L belongs to the cell whose span
+        // [depth - size/2, depth + size/2) contains it, so walls never double up or glue together
+        var span = vert ? cw : chh, kHit = Math.floor((depth + span / 2) / L);
+        var onWall = kHit >= 0 && kHit <= 4 && kHit * L >= depth - span / 2;
         var h = hash(c, r);
         hv[i] = h;
         type[i] = -1;
@@ -195,7 +207,8 @@
         var ang = Math.atan2(y, x) + Math.PI;
         sa[i] = Math.sin(ang);
         ca[i] = Math.cos(ang);
-        if (k >= 0 && k <= 4 && Math.abs(kf - k) * L < (vert ? thrX : thrY)) {
+        if (onWall) {
+          k = kHit;
           var along = vert ? ay : ax;
           var isGap = k >= 1 && k <= 3 && along < gapH;
           if (!isGap) type[i] = k;
@@ -410,7 +423,10 @@
     var W = this.W, H = this.H, s = clamp(Math.min(W, H) / 600, 0.6, 1.6);
     var few = this.reduce ? 0.4 : 1;
     var c = { t: 0, level: level, final: !!final, s: s, balloons: [], confetti: [], streamers: [] };
-    if (final) few *= 1.6; // the finale gets more of everything
+    // "FINISHED!" pops out of a blast: a flash, shockwaves and a burst of glyph shards
+    var bx0 = W / 2, by0 = H * 0.42, hues = [330, 190, 45, 25, 280], shards = Math.round((final ? 300 : 190) * few);
+    for (var b0 = 0; b0 < hues.length; b0++) this.burst(bx0, by0, Math.round(shards / hues.length), hues[b0], 520 * s, '*+✦·#%');
+    few = 0; // (balloons, confetti and ribbons were removed)
     var i, n = Math.round(14 * few);
     for (i = 0; i < n; i++) {
       c.balloons.push({
@@ -465,6 +481,25 @@
     ctx.globalAlpha = 0.28 * alpha;
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, W, H);
+    // the blast: a white flash, then two shockwave rings racing outwards
+    var bxc = W / 2, byc = H * 0.42;
+    if (t < 0.35) {
+      ctx.globalAlpha = (1 - t / 0.35) * 0.85;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(bxc, byc, 40 * s + t * 900 * s, 0, TAU);
+      ctx.fill();
+    }
+    for (var ring = 0; ring < 2; ring++) {
+      var rt = t - ring * 0.12;
+      if (rt <= 0 || rt > 0.9) continue;
+      ctx.globalAlpha = (1 - rt / 0.9) * alpha;
+      ctx.strokeStyle = ring ? DE.COLORS.enemy : DE.COLORS.player;
+      ctx.lineWidth = (10 - rt * 9) * s;
+      ctx.beginPath();
+      ctx.arc(bxc, byc, rt * Math.max(W, H) * 0.7, 0, TAU);
+      ctx.stroke();
+    }
     ctx.globalAlpha = alpha;
     // streamers: wavy ribbons falling from the top
     ctx.lineCap = 'round';
@@ -524,7 +559,7 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = '400 ' + fs.toFixed(1) + 'px "Rubik Mono One", "Arial Black", Impact, sans-serif';
-    var title = c.final ? 'YOU MADE IT OUT!' : 'LEVEL COMPLETE!';
+    var title = 'FINISHED!';
     var tw = ctx.measureText(title).width;
     if (tw > W * 0.92) { var k2 = (W * 0.92) / tw; ctx.scale(k2, k2); }
     var g = ctx.createLinearGradient(-tw / 2, 0, tw / 2, 0);
@@ -536,7 +571,8 @@
     ctx.shadowBlur = 0;
     ctx.font = '800 ' + (fs * 0.32).toFixed(1) + 'px ' + FONT_STACK;
     ctx.fillStyle = '#FFD23F';
-    ctx.fillText(c.final ? '★  ALL ' + DE.FINAL_LEVEL + ' LEVELS CLEARED  ·  +1000  ★' : '★  LEVEL ' + c.level + ' CLEARED  ·  +250  ★', 0, fs * 0.85);
+    var cfgC = DE.levelConfig(c.level);
+    ctx.fillText(c.final ? '★  ALL ' + DE.FINAL_LEVEL + ' MODES  ·  +1000  ★' : '★  MODE ' + c.level + ' · ' + cfgC.name + '  ·  +250  ★', 0, fs * 0.85);
     ctx.restore();
   };
 
@@ -797,9 +833,7 @@
   };
 
   /* ---------- Beyond: a pale, calm Claude FM-style field with no walls ---------- */
-  var GLITTER = ['*', '+', '✧', '·', '✦'];
   var GATE_HALF = 0.28; // share of the breaking wall (from its midpoint) drawn as a gate
-  var GLITTER_HUES = [42, 330, 190, 28, 280];
   Renderer.prototype.drawBeyond = function (state) {
     var ctx = this.ctx, A = state.arena, t = state.t || 0, W = this.W, H = this.H;
     var cw = this.cw, chh = this.chh, cols = this.cols, rows = this.rows, L = this.L;
@@ -829,12 +863,9 @@
       for (var c = 0; c < cols; c++) {
         var pxx = (c + 0.5) * cw, wx = (pxx - cx) / L, d = Math.max(Math.abs(wx) - bx, Math.abs(wy) - by), edge = 0.45;
         var n = vnoise((wx) * 0.55 + t * drift, (wy) * 0.9 - t * drift * 0.4); // anchored to the world, so it scrolls with the camera
-        if (Math.abs(d - edge) < thr * 1.4) {                 // glittering edge of the world
-          var tw = hash(c, r + ((t * 6) | 0)), gi = (hash(r, c) * 5) | 0;
-          var glit = GLITTER[gi], hueG = GLITTER_HUES[(c + r + ((t * 2) | 0)) % GLITTER_HUES.length];
-          if (tw < 0.18) this.put(ck(hueG, 95, 58), '✦', pxx, py);          // bright twinkle
-          else if (tw < 0.55) this.put(ck(hueG, 80, 66), glit, pxx, py);     // shimmer
-          else this.put(ck(230, 8, 42), '·', pxx, py);
+        var vEdge = Math.abs(wx) - bx >= Math.abs(wy) - by;              // a left/right edge (else top/bottom)
+        if (Math.abs(d - edge) < (vEdge ? cw : chh) * 0.5 / L) {           // solid grey wall around the world
+          this.put(ck(0, 0, 52), '█', pxx, py);
         } else if (d > edge) {                                // beyond the edge: denser dither
           if (n > 0.42) this.put(ck(230, 6, 14 + (n - 0.42) * 30), RAMP[2 + Math.min(8, ((n - 0.42) * 16) | 0)], pxx, py); // grey dither past the edge
         } else if (n > 0.7) {                                 // drifting glyph clouds on the field
@@ -896,12 +927,22 @@
     if (A.broken && A.exitPoint) this.edgeMarker(cx + A.exitPoint.x * L, cy + A.exitPoint.y * L, DE.COLORS.player);
     var P = A.player;
     if (P && !P.exit) {
-      var pxC = cx + P.x * L, pyC = cy + P.y * L, pf = P.facing | 0;
-      var blink = P.inv > 0 && (((t * 14) | 0) % 2 === 0);
-      if (!blink) this.spriteAt(P.angle, pf, pxC, pyC, spx, DE.COLORS.player, DE.COLORS.playerDark, 'rgba(255,138,61,.9)', 14);
+      // INFINITY: the car drives in from beyond the left edge after the celebration
+      var arr = this.arriveK(state), arrE = 1 - Math.pow(1 - arr, 3), startX = -(bx + 4);
+      var pxC = cx + (P.x + (startX - P.x) * (1 - arrE)) * L, pyC = cy + P.y * L, pf = arr < 1 ? 1 : P.facing | 0;
+      var blink = P.inv > 0 && arr >= 1 && (((t * 14) | 0) % 2 === 0);
+      if (!blink) this.spriteAt(arr < 1 ? 0 : P.angle, pf, pxC, pyC, spx, DE.COLORS.player, DE.COLORS.playerDark, 'rgba(255,138,61,.9)', 14);
       this.drawReady(state, P, pxC, pyC);
     }
     ctx.font = this.fGlyph;
+  };
+
+  // 0..1: how far the car has driven in at the start of a mode. It waits for the level-complete
+  // celebration to end, so you see the car arrive from where the last mode sent it.
+  Renderer.prototype.arriveK = function (state) {
+    var cu = (this.game && this.game.celebrateUntil) || -9, since = state.t - cu;
+    if (since < 0) return 0;                // still celebrating: the car has not arrived yet
+    return since < 20 ? clamp(since / 1.1, 0, 1) : 1;
   };
 
   // Car sprite turned to any angle (radians, 0 = right); falls back to the 4-way facing.
@@ -1201,7 +1242,7 @@
     var sFar = Math.floor(s * 0.35), sNear = Math.floor(s * 0.8);
     // the moon, high over the city
     // low enough that the taller buildings pass in front of it as the city scrolls by
-    var mr = Math.max(10, Math.min(W, H) * 0.045), mx = W * 0.8, my = Math.max(this.hudTop + mr + 6, this.hudTop + (hr * chh - this.hudTop) * 0.5);
+    var mr = Math.max(10, Math.min(W, H) * 0.045), mx = W * 0.8, my = Math.max(this.hudTop + mr + 6, this.hudTop + (hr * chh - this.hudTop) * 0.3);
     ctx.save();
     ctx.shadowColor = 'rgba(230,110,80,.75)'; // a slightly red moon
     ctx.shadowBlur = mr * 1.2 * this.dpr;
@@ -1291,7 +1332,10 @@
 
     // player car
     var laneF = R.laneF != null ? R.laneF : R.lane;
-    var carX = Math.min(DE.ROAD.playerX * W, -40 + pt * W * 0.5);
+    // the car drives in from the left once the celebration is over, and speeds off to the right at the end
+    var arrive = this.arriveK(state), ease = 1 - Math.pow(1 - arrive, 3);
+    var carX = -60 + (DE.ROAD.playerX * W + 60) * ease;
+    if (pt > dur + 0.3) carX += Math.pow(pt - dur - 0.3, 2) * W * 0.9;
     var carY = this.laneY(laneF) + (this.reduce ? 0 : Math.sin(t * 14) * 1.2);
     ctx.font = this.fGlyph;
     ctx.fillStyle = 'rgba(255,210,63,.7)';
@@ -1313,7 +1357,7 @@
 
     // next level label
     if (pt > dur) {
-      var label = 'NEXT: LEVEL ' + ((state.level | 0) + 1) + ' · ' + next.name;
+      var label = 'NEXT: MODE ' + ((state.level | 0) + 1) + ' · ' + next.name;
       var fsz = this.labelPx;
       ctx.font = '800 ' + fsz.toFixed(1) + 'px ' + FONT_STACK;
       var w = ctx.measureText(label).width;
