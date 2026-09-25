@@ -1,6 +1,10 @@
 # Architecture contract
 
 > **Current game (latest user requests override everything below):**
+> - **Double press (square arena):** a second press of the same direction within `DOUBLE_SEC` = 0.35 s (keys or taps) sets `dirBuf.double`, so the next gap moves 2 lanes (`_steps`). The slide speed scales with the lane distance, and the hint shows the 2-lane target.
+> - **All levels unlocked:** `state.checkpoint` is always `DE.FINAL_LEVEL`, and the saved checkpoint key is gone. The LEVELS menu "Start from level 1" button (`resetProgress`) only resets the current level.
+> - **Touch:** on touch pointers during play, a swipe of 26 px or more steers in the swipe direction, while a tap steers from the car toward the finger on release. In INFINITY, holding and dragging steers continuously. The level card shows touch tips (`LEVEL_TIPS_TOUCH`) on coarse-pointer devices.
+> - **Score pop-ups** rise and drift apart, with a pop-in scale and a shadow. On the road, a dot trail pays +10, +20 … +50.
 > - **Replay rule:** dying replays the same level. Only winning moves on, and after the final level a win restarts at level 1. The level being played is saved under `dodgeem-beyond-current` and reopened on page load; it is capped by the checkpoint, which stays the furthest unlocked level (used by the LEVELS menu).
 > - **Look and music per level:** level 1 has grey walls (`cfg.greyWalls`) and level 2 a grey road (`cfg.greyRoad`, via `rc()` in `drawRoad`) with a scrolling two-layer glyph city skyline above it (`building()` in render.js: far layer 6 cols wide at 0.35× scroll, near layer 9 cols wide at 0.8× scroll, occasional lit windows). Music: L1 plays arena track 1, L2 the road track, L3 "Neon Hyperdrive" (`BEYOND_TRACK_LEVEL = 4`). Music always starts ON at page load; the off state is no longer remembered.
 > - **Level names:** 1 = RETRO (the square arena), 2 = BEYOND (the dodge road), 3 = INFINITY (free roam; the portal is labelled INFINITY). Internally the level-3 layout is still called `'beyond'`.

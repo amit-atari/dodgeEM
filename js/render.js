@@ -268,7 +268,7 @@
       for (var c = 0; c < gw; c++) {
         var ch = grid[r][c];
         if (ch === '.') continue;
-        c2.fillStyle = ch === 'X' ? body : dark;
+        c2.fillStyle = ch === 'X' ? body : ch === 'w' ? '#FFF3B0' : dark;
         var x0 = Math.round(c * px * dpr), y0 = Math.round(r * px * dpr);
         var x1 = Math.round((c + 1) * px * dpr), y1 = Math.round((r + 1) * px * dpr);
         c2.fillRect(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0));
@@ -318,7 +318,14 @@
     this.unsub.push(ev.on('float', function (p) {
       if (!p) return;
       var q = self.toPx(p);
-      self.floats.push({ x: q[0], y: q[1] - self.fontPx * 1.2, txt: String(p.text), col: p.color || DE.COLORS.dot, life: 1.1 });
+      // score pop-ups fly up and drift apart so several in a row (e.g. +10 +20 +30) stay readable
+      var sc = clamp(self.L / 50, 0.7, 1.6), recent = 0;
+      for (var k = 0; k < self.floats.length; k++) if (self.floats[k].life > 0.9) recent++;
+      self.floats.push({
+        x: q[0] + (recent % 3 - 1) * self.fontPx * 1.5, y: q[1] - self.fontPx * 1.2,
+        vx: (Math.random() * 2 - 1) * 35 * sc + (p.space === 'road' ? 25 * sc : 0), vy: -(95 + Math.random() * 30) * sc,
+        txt: String(p.text), col: p.color || DE.COLORS.dot, life: 1.3, max: 1.3
+      });
     }));
     this.unsub.push(ev.on('roadStart', function () { self.parts.length = 0; }));
     this.unsub.push(ev.on('levelStart', function () { self.parts.length = 0; self.floats.length = 0; }));
@@ -530,7 +537,9 @@
     n = 0;
     for (i = 0; i < fl.length; i++) {
       var f = fl[i];
-      f.y -= 30 * dt;
+      f.x += (f.vx || 0) * dt;
+      f.y += (f.vy !== undefined ? f.vy : -30) * dt;
+      if (f.vy !== undefined) f.vy *= Math.pow(0.35, dt); // rises fast, then slows and fades
       f.life -= dt;
       if (f.life > 0) fl[n++] = f;
     }
@@ -578,8 +587,15 @@
       for (var j = 0; j < fl.length; j++) {
         var f = fl[j];
         ctx.globalAlpha = clamp(f.life / 0.6, 0, 1);
+        var age = (f.max || 1.1) - f.life, pop = age < 0.15 ? 0.6 + age / 0.15 * 0.6 : 1.2 - Math.min(0.2, (age - 0.15)); // quick pop, then settle
+        ctx.save();
+        ctx.translate(f.x, f.y);
+        ctx.scale(pop, pop);
+        ctx.fillStyle = 'rgba(0,0,0,.55)';
+        ctx.fillText(f.txt, 1.5, 1.5); // shadow keeps it readable on any background
         ctx.fillStyle = f.col;
-        ctx.fillText(f.txt, f.x, f.y);
+        ctx.fillText(f.txt, 0, 0);
+        ctx.restore();
       }
       ctx.globalAlpha = 1;
     }

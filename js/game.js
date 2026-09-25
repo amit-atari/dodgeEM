@@ -168,8 +168,8 @@
   /* ===================== GAME / INPUT / UI / BOOT (below) ===================== */
 
   var HI_KEY = 'dodgeem-beyond-hi';
-  var LEVEL_KEY = 'dodgeem-beyond-level'; // checkpoint: furthest level reached
   var TAP_SEC = 0.3;         // hold mode: a press shorter than this is a tap = move outward (cloverleaf: hop loops)
+  var DOUBLE_SEC = 0.45;     // a second press of the same direction this fast = jump two lanes
   var QUEUE_GAPS = 2;        // a WASD/arrow tap waits for the next gap where it applies, dropped after this many misses
   var GRACE_SEC = 0.1;      // held state flipping this soon after a gap re-decides that gap
   var HINT_DIST = 2.8;      // lanes: show the turn arrow when the next gap is this close
@@ -198,14 +198,6 @@
       return 0;
     }
   }
-  function loadLevel() {
-    try {
-      var v = parseInt(window.localStorage.getItem(LEVEL_KEY) || '1', 10) || 1;
-      return Math.max(1, Math.min(DE.FINAL_LEVEL, v)); // old saves may point past the final level
-    } catch (e) {
-      return 1;
-    }
-  }
   var CURRENT_KEY = 'dodgeem-beyond-current'; // the level being played (checkpoint = furthest unlocked)
   function loadCurrent() {
     try {
@@ -217,11 +209,6 @@
   }
   function saveCurrent(v) {
     try { window.localStorage.setItem(CURRENT_KEY, String(v)); } catch (e) { /* storage blocked */ }
-  }
-  function saveLevel(v) {
-    try {
-      window.localStorage.setItem(LEVEL_KEY, String(v));
-    } catch (e) { /* storage blocked: checkpoint lasts for this page only */ }
   }
   function saveHi(v) {
     try {
@@ -259,7 +246,7 @@
       arena: null,
       road: null
     };
-    this.state.checkpoint = loadLevel();
+    this.state.checkpoint = DE.FINAL_LEVEL; // every level is unlocked from the start (no unlocking needed)
     this.state.level = Math.min(loadCurrent(), this.state.checkpoint); // reopen on the level you were playing
     this._startLevel(true);
     this.state.pt = 0.5; // no fade-in on the very first frame (board first)
@@ -370,10 +357,6 @@
     }
     this.celebrateUntil = S.t + CELEBRATE_SEC;
     S.level++;
-    if (S.level > S.checkpoint) {
-      S.checkpoint = S.level;
-      saveLevel(S.level);
-    }
     this._startLevel(true);
   };
 
@@ -480,8 +463,7 @@
     S.pt = 0.5;
   };
   Game.prototype.resetProgress = function () {
-    this.state.checkpoint = 1;
-    saveLevel(1);
+    this.state.checkpoint = DE.FINAL_LEVEL; // levels stay unlocked; this just starts over from level 1
     saveCurrent(1);
     this.selectLevel(1);
   };
@@ -529,7 +511,14 @@
     S.held = false;
     this.dirHeld[dir] = true;
     if (S.arena && S.arena.layout === 'beyond' && S.phase !== 'road') { this._beyondKeys(); return; }
-    this.dirBuf = { dir: dir, t: S.t, gaps: 0 };
+    // a quick second press of the same direction = jump two lanes. It also counts when the first
+    // press was already used at a gap a moment ago (lastTap remembers it).
+    var prev = this.lastTap, dbl = !!(prev && prev.dir === dir && S.t - prev.t < DOUBLE_SEC);
+    this.lastTap = { dir: dir, t: S.t };
+    this.dirBuf = { dir: dir, t: S.t, gaps: 0, double: dbl };
+    if (dbl && S.mode === 'play' && S.arena && S.cfg.layout === 'square' && S.phase === 'arena') {
+      this._float('arena', S.arena.player.x, S.arena.player.y, 'x2', DE.COLORS.player);
+    }
     if (S.phase === 'road' && S.road) {
       var R = S.road;
       // the road car heads right: its left is the upper lane, its right the lower lane
@@ -567,6 +556,11 @@
     return w;
   };
 
+  // 2 lanes when that direction was double-pressed, else 1
+  Game.prototype._steps = function (dir) {
+    return this.dirBuf.dir === dir && this.dirBuf.double ? 2 : 1;
+  };
+
   // lane decision at a gap on side s
   Game.prototype._decide = function (from, s) {
     // all dots eaten: the gate is open and the car drives itself out (lane 0, then through the gate)
@@ -576,8 +570,8 @@
       // A/← and D/→ steer relative to the car: it drives counter-clockwise, so its left is always inward
       if (w.turnL) to = from + 1;
       else if (w.turnR) to = from - 1;
-      else if (w[DE.INWARD[s]]) to = from + 1;
-      else if (w[DE.OUTWARD[s]]) to = from - 1;
+      else if (w[DE.INWARD[s]]) to = from + this._steps(DE.INWARD[s]);
+      else if (w[DE.OUTWARD[s]]) to = from - this._steps(DE.OUTWARD[s]);
       return DE.clamp(to, 0, DE.LANES - 1);
     }
     // hold mode: holding = inward, a tap = outward, nothing = keep the lane
@@ -712,7 +706,8 @@
       }
       if (!P.exit) {
         P.u = wrap01(nu);
-        P.laneF += DE.clamp(P.target - P.laneF, -dt * LANE_SLIDE, dt * LANE_SLIDE);
+        var slide = LANE_SLIDE * Math.max(1, Math.abs(P.target - P.laneF)); // a 2-lane jump slides twice as fast
+        P.laneF += DE.clamp(P.target - P.laneF, -dt * slide, dt * slide);
         this._placePlayer();
         this._eat();
       }
@@ -772,8 +767,8 @@
     var s = DE.MIDS.indexOf(nm), k = P.target;
     var nt = this._decide(k, s);
     var options = [];
-    if (k < 3) options.push({ dir: DE.INWARD[s], lane: k + 1, active: nt === k + 1 });
-    if (k > 0) options.push({ dir: DE.OUTWARD[s], lane: k - 1, active: nt === k - 1 });
+    if (k < 3) options.push({ dir: DE.INWARD[s], lane: nt === k + 2 ? k + 2 : k + 1, active: nt === k + 1 || nt === k + 2 });
+    if (k > 0) options.push({ dir: DE.OUTWARD[s], lane: nt === k - 2 ? k - 2 : k - 1, active: nt === k - 1 || nt === k - 2 });
     A.hint = {
       m: nm,
       alpha: queued ? 1 : DE.clamp(1 - dist / HINT_DIST, 0.25, 1),
@@ -877,8 +872,11 @@
         o.dead = true;
         S.combo = S.t - this.lastDotT < 1.0 ? S.combo + 1 : 1;
         this.lastDotT = S.t;
-        this._addScore(10);
+        // a trail of dots in a row pays more each time: +10, +20, +30, +40, +50
+        var pts = 10 * Math.min(5, S.combo);
+        this._addScore(pts);
         this._emit('dot', { combo: S.combo, mult: S.mult, space: 'road', x: o.x, y: ln });
+        this._float('road', o.x, ln, '+' + pts, DE.COLORS.dot);
       } else if (o.kind === 'car' && Math.abs(o.x - px) < DE.ROAD.carHalf && P.inv <= 0) {
         this._die('road', o.x, ln);
         return;
@@ -1257,7 +1255,8 @@
       }
       if (!P.exit) {
         if (!hopped) P.u = wrap01(nu);
-        P.laneF += DE.clamp(P.target - P.laneF, -dt * LANE_SLIDE, dt * LANE_SLIDE);
+        var slide = LANE_SLIDE * Math.max(1, Math.abs(P.target - P.laneF)); // a 2-lane jump slides twice as fast
+        P.laneF += DE.clamp(P.target - P.laneF, -dt * slide, dt * slide);
         this._placeCloverPlayer();
         this._cloverEat();
       }
@@ -1417,6 +1416,7 @@
     ],
     arena: [
       ['W A S D', 'press the way you want to turn (↑ ← ↓ → too)'],
+      ['x2', 'press the same key twice quickly (or double-tap) to jump two lanes'],
       ['TAP', 'or tap / click on that side of your car'],
       ['GOAL', 'eat every dot to break the glowing wall']
     ]
@@ -1464,6 +1464,26 @@
     this.screens();
   };
 
+  // phones / tablets: the same tips in touch terms
+  var LEVEL_TIPS_TOUCH = {
+    arena: [
+      ['SWIPE', 'swipe the way you want to turn'],
+      ['TAP', 'or tap on that side of your car'],
+      ['x2', 'swipe or tap twice quickly to jump two lanes'],
+      ['GOAL', 'eat every dot, then the glowing gate opens']
+    ],
+    road: [
+      ['SWIPE', 'swipe up / down to change lanes'],
+      ['TAP', 'or tap above / below your car'],
+      ['GOAL', 'dodge the pink cars, grab the dots']
+    ],
+    beyond: [
+      ['DRAG', 'keep your finger down and move it: the car follows'],
+      ['SWIPE', 'or swipe / tap toward where you want to go'],
+      ['GOAL', 'the world is big: find all 20 stars, then drive into the light'],
+      ['WATCH', 'the longer you take, the faster new hunters join']
+    ]
+  };
   LEVEL_TIPS.beyond = [
     ['W A S D', 'drive in ANY direction (two keys = diagonal)'],
     ['DRAG', 'hold and move your finger / mouse: the car follows it'],
@@ -1482,7 +1502,10 @@
     setText(el.lKind, 'LEVEL ' + S.level + ' OF ' + DE.FINAL_LEVEL + (S.phase === 'road' ? ' · DODGE' : ' · ARENA') + (S.level >= DE.FINAL_LEVEL ? ' · FINAL' : ''));
     setText(el.lName, S.cfg.name);
     if (!el.lTips) return;
-    var tips = LEVEL_TIPS[S.phase === 'road' ? 'road' : S.cfg.layout === 'beyond' ? 'beyond' : S.cfg.layout === 'clover' ? 'clover' : 'arena'];
+    var kind = S.phase === 'road' ? 'road' : S.cfg.layout === 'beyond' ? 'beyond' : S.cfg.layout === 'clover' ? 'clover' : 'arena';
+    var touchDev = false;
+    try { touchDev = window.matchMedia('(pointer: coarse)').matches; } catch (e) { /* old browser */ }
+    var tips = (touchDev && LEVEL_TIPS_TOUCH[kind]) || LEVEL_TIPS[kind];
     while (el.lTips.firstChild) el.lTips.removeChild(el.lTips.firstChild);
     for (var i = 0; i < tips.length; i++) {
       var li = document.createElement('li'), k = document.createElement('kbd'), t = document.createElement('span');
@@ -1572,6 +1595,8 @@
   };
   var PREVENT_KEYS = { ' ': 1, spacebar: 1, arrowup: 1, arrowdown: 1, arrowleft: 1, arrowright: 1, up: 1, down: 1, left: 1, right: 1 };
   var IGNORE_KEYS = { tab: 1, control: 1, alt: 1, meta: 1, os: 1, altgraph: 1, capslock: 1, contextmenu: 1, unidentified: 1 };
+
+  var SWIPE_PX = 26; // finger travel that turns a touch into a swipe
 
   function isEditable(t) {
     if (!t || !t.tagName) return false;
@@ -1669,11 +1694,22 @@
           steerAt(e, false);
           return;
         }
+        // touch while playing: wait to see if it is a swipe (direction of the swipe) or a tap
+        if (e.pointerType !== 'mouse' && S0.mode === 'play' && !S0.paused) {
+          self.touch = { id: e.pointerId, x: e.clientX, y: e.clientY, ev: { clientX: e.clientX, clientY: e.clientY }, done: false };
+          return;
+        }
         var dir = dirFromPointer(e);
         self.pointerDir['p' + e.pointerId] = dir;
         game.dirDown(dir);
       });
       var end = function (e) {
+        var T = self.touch;
+        if (T && T.id === e.pointerId) {
+          self.touch = null;
+          if (!T.done && e.type === 'pointerup') { var td = dirFromPointer(T.ev); game.dirDown(td); game.dirUp(td); } // a tap
+          return;
+        }
         var id = 'p' + e.pointerId, dir = self.pointerDir[id];
         if (!dir) return;
         delete self.pointerDir[id];
@@ -1681,6 +1717,16 @@
       };
       stage.addEventListener('pointermove', function (e) {
         if (self.dragId === e.pointerId) steerAt(e, true); // free-hand: the car follows your finger
+        var T = self.touch;
+        if (T && T.id === e.pointerId && !T.done) {
+          var dx = e.clientX - T.x, dy = e.clientY - T.y;
+          if (Math.hypot(dx, dy) >= SWIPE_PX) { // a swipe: steer the way the finger moved
+            T.done = true;
+            var sd = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+            game.dirDown(sd);
+            game.dirUp(sd);
+          }
+        }
       });
       var endDrag = function (e) { if (self.dragId === e.pointerId) self.dragId = null; };
       stage.addEventListener('pointerup', endDrag);
@@ -1766,6 +1812,7 @@
     this.pointers = {};
     this.keys = {};
     this.pointerDir = {};
+    this.touch = null;
     for (var d in this.game.dirHeld) this.game.dirUp(d);
     this.game.up();
   };
