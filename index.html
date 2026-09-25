@@ -19,11 +19,11 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&amp;family=Rubik+Mono+One&amp;display=swap" media="print" onload="this.media='all'">
   <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&amp;family=Rubik+Mono+One&amp;display=swap"></noscript>
 
-  <link rel="stylesheet" href="css/style.css?v=41">
+  <link rel="stylesheet" href="css/style.css?v=43">
 
-  <script defer src="js/game.js?v=41"></script>
-  <script defer src="js/render.js?v=41"></script>
-  <script defer src="js/audio.js?v=41"></script>
+  <script defer src="js/game.js?v=43"></script>
+  <script defer src="js/render.js?v=43"></script>
+  <script defer src="js/audio.js?v=43"></script>
 </head>
 <body>
   <main class="app" id="app">
@@ -100,5 +100,12 @@
       </noscript>
     </div>
   </main>
+
+  <!-- phones / tablets held upright: ask to turn the device sideways (the game is played in landscape) -->
+  <div class="rotate" id="rotate" role="alert">
+    <div class="phone" aria-hidden="true"></div>
+    <strong>Rotate your device</strong>
+    <span>Dodge 'Em Beyond plays in landscape</span>
+  </div>
 </body>
 </html>

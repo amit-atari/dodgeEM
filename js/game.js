@@ -1478,8 +1478,8 @@
       ['GOAL', 'dodge the pink cars, grab the dots']
     ],
     beyond: [
-      ['DRAG', 'keep your finger down and move it: the car follows'],
-      ['SWIPE', 'or swipe / tap toward where you want to go'],
+      ['SWIPE', 'put a finger anywhere and slide it: the car turns that way'],
+      ['TAP', 'or tap a spot and the car heads there'],
       ['GOAL', 'the world is big: find all 20 stars, then drive into the light'],
       ['WATCH', 'the longer you take, the faster new hunters join']
     ]
@@ -1597,6 +1597,8 @@
   var IGNORE_KEYS = { tab: 1, control: 1, alt: 1, meta: 1, os: 1, altgraph: 1, capslock: 1, contextmenu: 1, unidentified: 1 };
 
   var SWIPE_PX = 26; // finger travel that turns a touch into a swipe
+  var JOY_DEAD = 10;  // INFINITY touch joystick: finger travel before it steers (px)
+  var JOY_R = 55;     // joystick radius (px); the base follows the finger beyond this
 
   function isEditable(t) {
     if (!t || !t.tagName) return false;
@@ -1670,6 +1672,15 @@
 
     // Beyond: steer toward the pointer's spot in the world
     this.dragId = null;
+    this.joy = null;
+    // show / hide the touch joystick (drawn by the renderer, in stage pixels)
+    var showJoy = function (ax, ay, fx, fy) {
+      var R0 = DE.app && DE.app.renderer;
+      if (!R0) return;
+      if (ax === null || ax === undefined) { R0.joy = null; return; }
+      var rr = stage.getBoundingClientRect();
+      R0.joy = { ax: ax - rr.left, ay: ay - rr.top, fx: fx - rr.left, fy: fy - rr.top, r: JOY_R };
+    };
     var steerAt = function (e, quiet) {
       var S0 = game.state, R0 = DE.app && DE.app.renderer;
       if (!(S0.mode === 'play' && !S0.paused && S0.arena && S0.arena.layout === 'beyond' && R0 && R0.L)) return;
@@ -1690,7 +1701,13 @@
         var S0 = game.state, R0 = DE.app && DE.app.renderer;
         if (S0.mode === 'play' && !S0.paused && S0.phase !== 'road' && S0.arena && S0.arena.layout === 'beyond' && R0 && R0.L) {
           var rr = stage.getBoundingClientRect();
-          self.dragId = e.pointerId; // keep steering while the finger / button stays down
+          if (e.pointerType !== 'mouse') {
+            // touch: a floating joystick where the finger lands; the car turns the way the finger moves
+            self.joy = { id: e.pointerId, ax: e.clientX, ay: e.clientY, moved: false, ev: { clientX: e.clientX, clientY: e.clientY } };
+            showJoy(e.clientX, e.clientY, e.clientX, e.clientY);
+            return;
+          }
+          self.dragId = e.pointerId; // mouse: keep steering toward the pointer while the button is down
           steerAt(e, false);
           return;
         }
@@ -1716,7 +1733,20 @@
         game.dirUp(dir);
       };
       stage.addEventListener('pointermove', function (e) {
-        if (self.dragId === e.pointerId) steerAt(e, true); // free-hand: the car follows your finger
+        if (self.dragId === e.pointerId) steerAt(e, true); // free-hand: the car follows the mouse
+        var J = self.joy;
+        if (J && J.id === e.pointerId) {
+          var jx = e.clientX - J.ax, jy = e.clientY - J.ay, jd = Math.hypot(jx, jy);
+          if (jd >= JOY_DEAD) {
+            J.moved = true;
+            game.steerTo(jx, jy, true);
+            if (jd > JOY_R) { // the joystick base follows the finger, so it never runs out of room
+              J.ax = e.clientX - (jx / jd) * JOY_R;
+              J.ay = e.clientY - (jy / jd) * JOY_R;
+            }
+          }
+          showJoy(J.ax, J.ay, e.clientX, e.clientY);
+        }
         var T = self.touch;
         if (T && T.id === e.pointerId && !T.done) {
           var dx = e.clientX - T.x, dy = e.clientY - T.y;
@@ -1728,7 +1758,15 @@
           }
         }
       });
-      var endDrag = function (e) { if (self.dragId === e.pointerId) self.dragId = null; };
+      var endDrag = function (e) {
+        if (self.dragId === e.pointerId) self.dragId = null;
+        var J = self.joy;
+        if (J && J.id === e.pointerId) {
+          self.joy = null;
+          showJoy(null);
+          if (!J.moved && e.type === 'pointerup') steerAt(J.ev, false); // a plain tap: head toward that spot
+        }
+      };
       stage.addEventListener('pointerup', endDrag);
       stage.addEventListener('pointercancel', endDrag);
       stage.addEventListener('pointerup', end);
@@ -1775,6 +1813,35 @@
       remove(self.keys, e.code || k);
     });
 
+    // ---- phones / tablets: landscape only ----
+    // Turning the device upright pauses the game (a "rotate your device" screen covers it).
+    // The first touch goes fullscreen and asks the browser to lock landscape (Android; iOS ignores it).
+    var portrait = null;
+    try { portrait = window.matchMedia('(pointer: coarse) and (orientation: portrait)'); } catch (e) { /* old browser */ }
+    var onOrient = function () {
+      if (portrait && portrait.matches) { self.releaseAll(); game.setPaused(true); }
+    };
+    if (portrait) {
+      if (portrait.addEventListener) portrait.addEventListener('change', onOrient);
+      else if (portrait.addListener) portrait.addListener(onOrient);
+    }
+    var triedLandscape = false;
+    stage && stage.addEventListener('pointerdown', function (e) {
+      if (triedLandscape || e.pointerType === 'mouse') return;
+      triedLandscape = true;
+      try {
+        var root = document.documentElement, fs = document.fullscreenElement || document.webkitFullscreenElement;
+        var req = !fs && (root.requestFullscreen || root.webkitRequestFullscreen);
+        var lock = function () {
+          try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function () {}); } catch (err) { /* unsupported */ }
+        };
+        if (req) {
+          var p = req.call(root);
+          if (p && p.then) p.then(lock, function () {}); else lock();
+        } else lock();
+      } catch (err) { /* ignore */ }
+    }, true);
+
     // ---- auto pause ----
     window.addEventListener('blur', function () {
       self.releaseAll();
@@ -1813,6 +1880,8 @@
     this.keys = {};
     this.pointerDir = {};
     this.touch = null;
+    this.joy = null;
+    if (DE.app && DE.app.renderer) DE.app.renderer.joy = null;
     for (var d in this.game.dirHeld) this.game.dirUp(d);
     this.game.up();
   };

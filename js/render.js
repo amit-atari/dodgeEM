@@ -620,6 +620,26 @@
       ctx.fillRect(0, 0, W, H);
       ctx.globalAlpha = 1;
     }
+    // touch joystick (INFINITY): base ring where the finger landed, knob under the finger
+    var J = this.joy;
+    if (J && state.phase !== 'road' && state.arena && state.arena.layout === 'beyond') {
+      ctx.save();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.globalAlpha = 0.55;
+      ctx.strokeStyle = DE.COLORS.player;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(J.ax, J.ay, J.r, 0, TAU);
+      ctx.stroke();
+      var kx = J.fx - J.ax, ky = J.fy - J.ay, kd = Math.hypot(kx, ky), km = Math.min(kd, J.r);
+      if (kd > 0) { kx = (kx / kd) * km; ky = (ky / kd) * km; }
+      ctx.globalAlpha = 0.8;
+      ctx.fillStyle = DE.COLORS.player;
+      ctx.beginPath();
+      ctx.arc(J.ax + kx, J.ay + ky, J.r * 0.38, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
     this.drawCelebration();
   };
 

@@ -552,3 +552,15 @@ button { font: inherit; color: inherit; }
 /* Beyond (level 3) is drawn on a pale field: dark HUD text there */
 #stage.pale .lv, #stage.pale .stats b { color: #2A2533; }
 #stage.pale .stats { color: #5E5870; }
+
+/* ---------- landscape only on phones / tablets ---------- */
+.rotate { display: none; position: fixed; inset: 0; z-index: 50; background: var(--deep); color: var(--ink);
+  flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center;
+  font-family: var(--mono); }
+.rotate strong { font-family: var(--display); font-weight: 400; font-size: 22px; color: var(--orange); }
+.rotate span { font-size: 13px; color: var(--dim); }
+.rotate .phone { width: 46px; height: 78px; border: 3px solid var(--orange); border-radius: 9px;
+  box-shadow: 0 0 18px rgba(255, 138, 61, .45); animation: de-rotate 2s ease-in-out infinite; }
+@keyframes de-rotate { 0%, 25% { transform: rotate(0deg); } 60%, 100% { transform: rotate(-90deg); } }
+@media (pointer: coarse) and (orientation: portrait) { .rotate { display: flex; } }
+@media (prefers-reduced-motion: reduce) { .rotate .phone { animation: none; transform: rotate(-90deg); } }
